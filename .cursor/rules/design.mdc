@@ -1,0 +1,13 @@
+
+[Behaviour]
+- for any alerts, error, information messages where the user should acknowledge, don't use the standard javascript alert. Instead use the shadcn alert dialog component with just the ok button.  For messages where the user does not need to acknowledge, use a shadcn sonnen instead.
+- for any notifications or updates where the user should be notified but not necessarily need to acknowledge, use the shadcn sonner component
+
+[Edit_Field_Behaviour]
+- For a given single field that is to be editable, have a lucide icon pencil next to the field , then when in editing mode, show a green lucide circle-check for the save/submit button, and a red lucide circle-x for the cancel button.
+
+
+[Style]
+- include seo friendly alt text for all images and components and buttons
+- when any pages are loading,  then show a shadcn spinner
+- in dialog boxes, action buttons, etc, always have the positive action on the left and negative action on the right. For example, the "save" button should be on the left and "cancel" button on the right.

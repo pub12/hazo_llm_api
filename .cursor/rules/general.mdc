@@ -1,0 +1,76 @@
+---
+description: General rules always to be used
+globs: *
+alwaysApply: true
+---
+
+[General]
+- Start all chats wtih 🐸
+- End all chats with 🦊
+- Only implement if you're 90% sure of requirement or the fix.  Otherwise ask questions or things for me to check.
+- after making a change, for the pages that had both direct and indirect impact, make a curl request to ensrue there are no errors. Check the terminal as well for errors. Also make sure to test any API endpoints and fix appropriately.  If after 3 attempts you cannot fix, provide a summary of the issue and advice on next steps.
+
+[Style]
+- Always use snake_case
+- Include a description of purpose of file at top of each new file
+- Include comments at the top of each function or major section of code
+- Add comments for each file and also major section
+- Add a class name identifier for div tags prefixed with "cls_" so that they can be easily identified and searched.  Reused divs should have the same name.
+
+[UI_Behaviour]
+- All data input fields (not interaction fields), it should be non-editable but there is a lucide pencil icon next to it.  When pressed, it'll allow to edit the inptu field, and a lucide circle-check-big will be used for the "Submit"/"save"/"update" button, and a lucide circle-x will be used for the cancel button.
+
+
+[Technology]
+- use the following tech stack:
+  - React
+  - Next.js
+  - TailwindCSS
+  - TypeScript
+  - Shadcn/UI
+- use npm shadcn@latest add * to add components. Do not use shadcn-ui
+
+[Architecture]
+- store all configuration values in a config ini file.  Always put hard coded values that have chance to change in config ini file.
+- store any sensitive data in .env file (to be excluded in git)
+- create reusable components to prevent having redundant code and to improve maintainability
+- Ensure you have a minimum of one file per route
+- Group pages into directories for maintainability
+
+[Database]
+- database schema can be gound on .cursor/rules/db_schema.md
+
+[Logging]
+- when in a an applciation project, use winston as the logging service for backend logging under a filename from config.ini logging.logfile.  Hvae a log file per day.  When developing a package, use parent logging service, but still log to console.
+-  When there's an error that happens, always log on the serverside.
+- Use the config.
+- In the logging, always include the filename, line number, message and relevant data to help troubleshoot in future in the json log entry
+- When error messages are shown to the user, they should always be logged verbatem in the serverside log file as well
+- pretty print the json output
+- don't import the logger in the client side code
+- whenever there's any actions on the database, or any API calls, please add details of the payload and update as well as the resulsts in the log file to help debug issues.  For API calls, don't save any base64 data as it is too large.
+
+[For Packages ES Module Exports]
+- When creating npm packages that will be consumed by ES module bundlers (Next.js, Vite, etc.), ALL export statements MUST use explicit file paths with .js extensions
+- Directory imports like `export * from './components'` are INVALID in ES modules and will fail at runtime
+- ALWAYS use explicit paths: `export * from './components/index.js'` instead of `export * from './components'`
+- Even though source files are .ts, TypeScript requires .js extensions in import/export paths for ES module output
+- This applies to all export statements in index.ts files and any barrel export files
+
+[For packages: TypeScript Configuration]
+- For package builds (tsconfig.build.json), set moduleResolution to "node16" or "node" (not "bundler") when shipping compiled output
+- Ensure module is set to "ESNext" or "ES2020" for modern ES module output
+- Add "type": "module" to package.json if shipping pure ESM packages
+
+[For Packages: Export Path Rules]
+- ✅ CORRECT: `export * from './lib/index.js'`
+- ✅ CORRECT: `export * from './components/index.js'`
+- ✅ CORRECT: `export { Something } from './utils.js'`
+- ❌ WRONG: `export * from './lib'`
+- ❌ WRONG: `export * from './components'`
+- ❌ WRONG: `export { Something } from './utils'` (without extension)
+
+[Verification]
+- After building, check dist/index.js and ensure all export paths have .js extensions
+- Test the built package in a consuming Next.js or ES module project to verify imports work
+- If using TypeScript path aliases (@/...), ensure they are resolved to relative paths in the compiled output (not left as aliases)

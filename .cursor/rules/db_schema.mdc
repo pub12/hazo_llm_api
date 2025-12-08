@@ -1,0 +1,76 @@
+# Database Schema
+
+## SQLite Database: `prompt_library.sqlite`
+
+Database path is configured in `hazo_llm_api_config.ini` under `[llm].sqlite_path`.
+Auto-created on module import when `hazo_llm_api/server` is imported.
+
+---
+
+## Table: `prompts_library`
+
+Stores prompt templates for LLM operations.
+
+### Fields
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `uuid` | TEXT | PRIMARY KEY | Unique identifier for the prompt |
+| `prompt_area` | TEXT | NOT NULL | Area/category of the prompt (e.g., "test", "marketing") |
+| `prompt_key` | TEXT | NOT NULL | Key identifier within the area (e.g., "greeting", "weather") |
+| `prompt_text` | TEXT | NOT NULL | The actual prompt text content |
+| `prompt_variables` | TEXT | DEFAULT '[]' | JSON string of variables used in the prompt |
+| `prompt_notes` | TEXT | DEFAULT '' | Additional notes about the prompt |
+| `created_at` | TEXT | DEFAULT datetime('now') | Timestamp when record was created |
+| `changed_by` | TEXT | DEFAULT NULL | Timestamp when record was last modified |
+
+### Indexes
+
+- `idx_prompts_area_key` on `(prompt_area, prompt_key)` - Fast lookups by area and key combination
+
+### SQL Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS prompts_library (
+  uuid TEXT PRIMARY KEY,
+  prompt_area TEXT NOT NULL,
+  prompt_key TEXT NOT NULL,
+  prompt_text TEXT NOT NULL,
+  prompt_variables TEXT DEFAULT '[]',
+  prompt_notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  changed_by TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_prompts_area_key 
+ON prompts_library(prompt_area, prompt_key);
+```
+
+### TypeScript Interface
+
+See `PromptRecord` in `src/lib/llm_api/types.ts`
+
+```typescript
+interface PromptRecord {
+  uuid: string;
+  prompt_area: string;
+  prompt_key: string;
+  prompt_text: string;
+  prompt_variables: string;
+  prompt_notes: string;
+  created_at: string;
+  changed_by: string;
+}
+```
+
+### CRUD Operations
+
+Available from `hazo_llm_api/server`:
+
+- `insert_prompt(db, prompt, logger)` - Insert new prompt
+- `update_prompt(db, uuid, updates, logger)` - Update existing prompt
+- `get_prompt_by_area_and_key(db, area, key, logger)` - Fetch by area/key
+- `get_prompt_by_uuid(db, uuid, logger)` - Fetch by UUID
+- `get_prompts_by_area(db, area, logger)` - Fetch all prompts in an area
+
+

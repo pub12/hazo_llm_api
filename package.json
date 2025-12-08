@@ -1,0 +1,68 @@
+{
+  "name": "hazo_llm_api",
+  "version": "1.0.0",
+  "description": "Wrapper to call different LLMs and includes prompt management",
+  "keywords": [
+    "LLM",
+    "wrapper",
+    "api",
+    "caller"
+  ],
+  "homepage": "https://github.com/pub12/hazo_llm_api#readme",
+  "bugs": {
+    "url": "https://github.com/pub12/hazo_llm_api/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pub12/hazo_llm_api.git"
+  },
+  "license": "MIT",
+  "author": "Pubs Abayasiri",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server.js",
+      "types": "./dist/server.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "techdoc.md"
+  ],
+  "workspaces": [
+    "test-app"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev:package": "tsc -p tsconfig.build.json --watch",
+    "dev:test-app": "npm run dev --workspace=test-app",
+    "build:test-app": "npm run build --workspace=test-app",
+    "start:test-app": "npm start --workspace=test-app",
+    "install:all": "npm install",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "ini": "^6.0.0",
+    "sql.js": "^1.10.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/ini": "^4.1.1",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/sql.js": "^1.4.9",
+    "typescript": "^5.0.0"
+  }
+}
