@@ -5,9 +5,11 @@
 ### Package Structure
 
 The `hazo_llm_api` package is an ES module package providing:
-- **LLM API wrappers** for multiple providers (Gemini, Qwen, extensible)
-- **Prompt management system** with SQLite storage and caching
-- **React components** for UI
+- **Multi-Provider LLM System** with centralized registry and provider abstraction
+- **LLM API wrappers** for multiple providers (Gemini, Qwen, extensible to OpenAI, Anthropic, etc.)
+- **Prompt management system** with SQLite storage, LRU caching, and variable substitution
+- **React components** for UI (Layout)
+- **Configuration system** using INI files with environment variable support
 
 ```
 src/
@@ -183,18 +185,95 @@ TailwindCSS with Shadcn/UI theming:
 **Format**: INI format with sections
 
 **Sections**:
+- `[llm]` - Global LLM configuration (enabled_llms, primary_llm, sqlite_path)
+- `[llm_gemini]` - Gemini provider configuration
+- `[llm_qwen]` - Qwen provider configuration
+- `[llm_<provider>]` - Custom provider configurations
 - `[logging]` - Log file paths and settings
 - `[package]` - Build configuration
 - `[test_app]` - Test app settings
 - `[ui]` - UI defaults
+- `[database]` - Database configuration
+
+### Global LLM Configuration
+
+The `[llm]` section controls which providers are available:
+
+```ini
+[llm]
+# JSON array or comma-separated list of enabled providers
+enabled_llms=["gemini", "qwen"]
+# Default provider when not specified in API calls
+primary_llm=gemini
+# SQLite database path (relative to app root)
+sqlite_path=prompt_library.sqlite
+```
+
+### Provider Configuration Sections
+
+Each provider has its own `[llm_<name>]` section:
+
+```ini
+[llm_gemini]
+# API endpoints
+api_url=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent
+api_url_image=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent
+
+# Optional per-service model overrides
+model_text_text=gemini-2.5-flash
+model_image_text=gemini-2.5-flash
+model_text_image=gemini-2.5-flash-image
+model_image_image=gemini-2.5-flash-image
+
+# Capabilities this provider supports (JSON array)
+capabilities=["text_text", "image_text", "text_image", "image_image"]
+
+# Generation parameters (prefixed by service type)
+text_temperature=0.7
+text_maxOutputTokens=1024
+text_topP=0.95
+image_temperature=0.1
+image_topK=20
+```
+
+### Generation Parameter Prefixes
+
+Use `text_` or `image_` prefixes to configure parameters per service type:
+
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `temperature` | number | Randomness (0.0-2.0) | `text_temperature=0.7` |
+| `maxOutputTokens` | number | Max response length | `text_maxOutputTokens=1024` |
+| `topP` | number | Nucleus sampling (0.0-1.0) | `text_topP=0.95` |
+| `topK` | number | Top-k sampling | `image_topK=20` |
+| `stopSequences` | JSON array | Stop sequences | `text_stopSequences=["END"]` |
+| `responseMimeType` | string | Response format | `text_responseMimeType=text/plain` |
+
+**Qwen-specific parameters:**
+- `max_tokens` instead of `maxOutputTokens`
+- `top_p` instead of `topP`
+- `top_k` instead of `topK`
+- `stop` instead of `stopSequences`
+- `presence_penalty`, `frequency_penalty`, `n`
 
 ### Environment Variables
 
 **File**: `.env.local` (not committed to git)
 
-**Usage**: Store sensitive values like API keys, database credentials, etc.
+**Usage**: Store sensitive API keys
 
-**Template**: `.env.local.example` provides a template
+**Format**:
+```bash
+# Provider API keys (uppercase provider name + _API_KEY)
+GEMINI_API_KEY=your_gemini_api_key_here
+QWEN_API_KEY=your_qwen_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+**Important**:
+- Never commit `.env.local` to git
+- Add to `.gitignore`
+- API key environment variable naming: `<PROVIDER_NAME>_API_KEY`
 
 ## Development Workflow
 
@@ -311,15 +390,44 @@ Logs should be:
 
 ## LLM Provider System
 
+### Architecture Overview
+
+The provider system uses a **centralized registry** pattern:
+
+```
+┌─────────────────────┐
+│  Service Functions  │  (hazo_llm_text_text, etc.)
+└──────────┬──────────┘
+           │
+           v
+┌─────────────────────┐
+│  Provider Registry  │  (lookup, validation, capability checking)
+└──────────┬──────────┘
+           │
+           v
+┌─────────────────────┐
+│  Provider Instance  │  (GeminiProvider, QwenProvider, etc.)
+└─────────────────────┘
+```
+
+**Key components:**
+1. **Registry** (`lib/providers/registry.ts`): Central provider management
+2. **Provider Interface** (`lib/providers/types.ts`): Contract all providers must implement
+3. **Provider Implementations** (`lib/providers/gemini/`, `lib/providers/qwen/`): Specific LLM integrations
+4. **Configuration Loader** (`lib/llm_api/index.ts`): Reads config and initializes providers
+
 ### Provider Interface
 
 All LLM providers implement the `LLMProvider` interface:
 
 ```typescript
 interface LLMProvider {
+  // Identification and capabilities
   get_name(): string;
   get_capabilities(): Set<ServiceType>;
   get_model_for_service(service_type: ServiceType): string | undefined;
+
+  // Service implementations
   text_text(params: TextTextParams, logger: Logger): Promise<LLMResponse>;
   image_text(params: ImageTextParams, logger: Logger): Promise<LLMResponse>;
   text_image(params: TextImageParams, logger: Logger): Promise<LLMResponse>;
@@ -329,12 +437,44 @@ interface LLMProvider {
 
 ### Service Types
 
-| Service | Description |
-|---------|-------------|
-| `text_text` | Text input → Text output |
-| `image_text` | Image input → Text output (analysis) |
-| `text_image` | Text input → Image output (generation) |
-| `image_image` | Image input → Image output (transformation) |
+| Service | Constant | Description |
+|---------|----------|-------------|
+| `text_text` | `SERVICE_TYPES.TEXT_TEXT` | Text input → Text output |
+| `image_text` | `SERVICE_TYPES.IMAGE_TEXT` | Image input → Text output (analysis) |
+| `text_image` | `SERVICE_TYPES.TEXT_IMAGE` | Text input → Image output (generation) |
+| `image_image` | `SERVICE_TYPES.IMAGE_IMAGE` | Image input → Image output (transformation) |
+
+### Provider Registry
+
+The registry manages all active providers:
+
+```typescript
+// Registration
+register_provider(new GeminiProvider(config));
+register_provider(new QwenProvider(config));
+
+// Lookup
+const provider = get_provider('gemini', logger);
+
+// Capability validation
+if (validate_capability(provider, 'text_image', logger)) {
+  // Provider supports text → image generation
+}
+
+// Check enabled status
+if (is_llm_enabled('gemini')) {
+  // Provider is enabled in config
+}
+```
+
+**Registry Functions:**
+- `register_provider(provider)` - Add a provider to the registry
+- `get_provider(name, logger)` - Get provider by name (returns primary if name is null)
+- `set_enabled_llms(names)` - Set which providers are enabled
+- `set_primary_llm(name)` - Set the default provider
+- `get_primary_llm()` - Get the default provider name
+- `validate_capability(provider, service_type, logger)` - Check if provider supports a service
+- `clear_registry()` - Clear all providers (for testing)
 
 ### Adding a New LLM Provider
 
@@ -344,7 +484,7 @@ To add a new provider (e.g., OpenAI), follow these steps:
 
 ```
 src/lib/providers/openai/
-├── index.ts           # Exports
+├── index.ts           # Exports and provider class
 ├── openai_provider.ts # Provider implementation
 └── openai_client.ts   # API client (optional)
 ```
@@ -354,23 +494,39 @@ src/lib/providers/openai/
 ```typescript
 // src/lib/providers/openai/openai_provider.ts
 import type { LLMProvider, ServiceType, LLMCapabilities } from '../types.js';
-import type { Logger, LLMResponse, TextTextParams } from '../../llm_api/types.js';
+import type {
+  Logger,
+  LLMResponse,
+  TextTextParams,
+  ImageTextParams,
+  TextImageParams,
+  ImageImageParams,
+} from '../../llm_api/types.js';
 
+/**
+ * Configuration interface for OpenAI provider
+ */
 export interface OpenAIProviderConfig {
   api_key: string;
   api_url?: string;
   model_text_text?: string;
   model_image_text?: string;
+  model_text_image?: string;
   capabilities?: ServiceType[];
   logger: Logger;
+  // Add any provider-specific config here
 }
 
+/**
+ * OpenAI LLM Provider Implementation
+ */
 export class OpenAIProvider implements LLMProvider {
   private config: OpenAIProviderConfig;
   private capabilities: LLMCapabilities;
 
   constructor(config: OpenAIProviderConfig) {
     this.config = config;
+    // Default capabilities if not specified
     this.capabilities = new Set(
       config.capabilities || ['text_text', 'image_text']
     );
@@ -388,97 +544,180 @@ export class OpenAIProvider implements LLMProvider {
     const model_map: Record<ServiceType, string | undefined> = {
       text_text: this.config.model_text_text || 'gpt-4',
       image_text: this.config.model_image_text || 'gpt-4-vision-preview',
-      text_image: undefined,
-      image_image: undefined,
+      text_image: this.config.model_text_image || 'dall-e-3',
+      image_image: undefined, // Not supported
     };
     return model_map[service_type];
   }
 
   async text_text(params: TextTextParams, logger: Logger): Promise<LLMResponse> {
-    // Implement OpenAI API call
-    const response = await fetch(this.config.api_url || 'https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.api_key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.get_model_for_service('text_text'),
-        messages: [{ role: 'user', content: params.prompt }],
-      }),
-    });
+    try {
+      const model = this.get_model_for_service('text_text');
+      const response = await fetch(
+        this.config.api_url || 'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.config.api_key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: params.prompt }],
+          }),
+        }
+      );
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      return { success: false, error: data.error?.message || 'API call failed' };
+      if (!response.ok) {
+        logger.error('OpenAI API error', {
+          file: 'openai_provider.ts',
+          line: 65,
+          data: { error: data.error, status: response.status },
+        });
+        return {
+          success: false,
+          error: data.error?.message || 'API call failed',
+        };
+      }
+
+      return {
+        success: true,
+        text: data.choices?.[0]?.message?.content,
+        raw_response: data,
+      };
+    } catch (error) {
+      const error_message = error instanceof Error ? error.message : String(error);
+      logger.error('OpenAI text_text failed', {
+        file: 'openai_provider.ts',
+        line: 78,
+        data: { error: error_message },
+      });
+      return { success: false, error: error_message };
     }
-
-    return {
-      success: true,
-      text: data.choices?.[0]?.message?.content,
-    };
   }
 
   async image_text(params: ImageTextParams, logger: Logger): Promise<LLMResponse> {
-    // Implement vision API call
-    // ...
+    // Implement GPT-4 Vision API call
+    return { success: false, error: 'image_text not yet implemented' };
   }
 
   async text_image(params: TextImageParams, logger: Logger): Promise<LLMResponse> {
-    return { success: false, error: 'text_image not supported by OpenAI provider' };
+    // Implement DALL-E API call if needed
+    return { success: false, error: 'text_image not yet implemented' };
   }
 
   async image_image(params: ImageImageParams, logger: Logger): Promise<LLMResponse> {
+    // OpenAI doesn't support image-to-image transformation
     return { success: false, error: 'image_image not supported by OpenAI provider' };
   }
 }
 ```
 
-#### Step 3: Register the Provider Factory
+#### Step 3: Add Provider Loader to `lib/llm_api/index.ts`
+
+Add a loader function similar to `load_gemini_provider_from_config` and `load_qwen_provider_from_config`:
 
 ```typescript
-// src/lib/providers/openai/index.ts
-export { OpenAIProvider, type OpenAIProviderConfig } from './openai_provider.js';
+// In lib/llm_api/index.ts, add this function:
 
-// Register the factory in the config system
-import { register_provider_factory, COMMON_PARAM_MAPPINGS } from '../../config/index.js';
-import { OpenAIProvider, type OpenAIProviderConfig } from './openai_provider.js';
+function load_openai_provider_from_config(logger: Logger): OpenAIProvider | null {
+  const config_path = find_config_file();
+  if (!config_path) {
+    logger.warn('Config file not found, cannot load OpenAI provider', {
+      file: 'index.ts',
+      line: 540,
+    });
+    return null;
+  }
 
-register_provider_factory({
-  name: 'openai',
-  config_section: 'llm_openai',
-  text_param_mappings: COMMON_PARAM_MAPPINGS,
-  image_param_mappings: COMMON_PARAM_MAPPINGS,
+  try {
+    const config_content = fs.readFileSync(config_path, 'utf-8');
+    const config = ini.parse(config_content);
+    const openai_section = config.llm_openai || {};
 
-  build_config(section, api_key, text_config, image_config, capabilities, logger) {
-    return {
+    // Load API key from environment
+    const api_key = load_api_key_from_env('openai');
+    if (!api_key) {
+      logger.error('OPENAI_API_KEY not found in environment variables', {
+        file: 'index.ts',
+        line: 552,
+        data: { config_path },
+      });
+      return null;
+    }
+
+    // Parse capabilities
+    const capabilities = parse_capabilities(openai_section.capabilities);
+
+    const provider_config: OpenAIProviderConfig = {
       api_key,
-      api_url: section.api_url,
-      model_text_text: section.model_text_text,
-      model_image_text: section.model_image_text,
+      api_url: openai_section.api_url,
+      model_text_text: openai_section.model_text_text,
+      model_image_text: openai_section.model_image_text,
+      model_text_image: openai_section.model_text_image,
       capabilities: capabilities.length > 0 ? capabilities : undefined,
       logger,
     };
-  },
 
-  create_provider(config) {
-    return new OpenAIProvider(config);
-  },
-});
+    return new OpenAIProvider(provider_config);
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to load OpenAI provider from config', {
+      file: 'index.ts',
+      line: 570,
+      data: { error: error_message, config_path },
+    });
+    return null;
+  }
+}
+
+// Then add to load_and_register_providers function:
+function load_and_register_providers(logger: Logger): void {
+  // ... existing code ...
+
+  for (const llm_name of global_config.enabled_llms) {
+    if (llm_name.toLowerCase() === 'gemini') {
+      // ... existing Gemini code ...
+    } else if (llm_name.toLowerCase() === 'qwen') {
+      // ... existing Qwen code ...
+    } else if (llm_name.toLowerCase() === 'openai') {
+      const provider = load_openai_provider_from_config(logger);
+      if (provider) {
+        register_provider(provider);
+        logger.info('Registered OpenAI provider', {
+          file: 'index.ts',
+          line: 595,
+          data: {
+            capabilities: Array.from(provider.get_capabilities()),
+          },
+        });
+      } else {
+        logger.warn('OpenAI provider is enabled in config but failed to load', {
+          file: 'index.ts',
+          line: 602,
+        });
+      }
+    }
+  }
+}
 ```
 
 #### Step 4: Add to Config File
 
 ```ini
 [llm]
-enabled_llms=["gemini", "openai"]
+enabled_llms=["gemini", "qwen", "openai"]
+primary_llm=gemini
 
 [llm_openai]
 api_url=https://api.openai.com/v1/chat/completions
 model_text_text=gpt-4
 model_image_text=gpt-4-vision-preview
-capabilities=["text_text", "image_text"]
+model_text_image=dall-e-3
+capabilities=["text_text", "image_text", "text_image"]
+text_temperature=0.7
 ```
 
 #### Step 5: Add API Key to Environment
@@ -486,6 +725,16 @@ capabilities=["text_text", "image_text"]
 ```bash
 # .env.local
 OPENAI_API_KEY=your_api_key_here
+```
+
+#### Step 6: Export Provider
+
+```typescript
+// src/lib/providers/openai/index.ts
+export { OpenAIProvider, type OpenAIProviderConfig } from './openai_provider.js';
+
+// src/lib/providers/index.ts
+export * from './openai/index.js';
 ```
 
 ### Provider Configuration Parameters
@@ -539,22 +788,64 @@ const response = await hazo_llm_text_text({
 
 ### Prompt Caching
 
-Prompts are cached in memory to reduce database queries:
+The `PromptCache` class implements an LRU (Least Recently Used) cache with TTL support:
+
+**Features:**
+- Time-based expiration (TTL)
+- LRU eviction when cache is full
+- Per-entry access tracking
+- Cache statistics (hits, misses, hit rate)
+- Configurable size and TTL
+
+**Usage:**
 
 ```typescript
-import { configure_prompt_cache, get_prompt_cache } from 'hazo_llm_api/server';
+import { PromptCache } from 'hazo_llm_api/server';
 
-// Configure cache settings
-configure_prompt_cache({
+// Create cache instance
+const cache = new PromptCache({
   ttl_ms: 300000,  // 5 minutes
   max_size: 100,   // Maximum entries
-  enabled: true,
+  enabled: true,   // Enable/disable caching
 });
 
-// Invalidate cache after updates
-const cache = get_prompt_cache();
+// Get from cache
+const prompt = cache.get('marketing', 'greeting');
+if (prompt) {
+  // Cache hit - use cached prompt
+} else {
+  // Cache miss - fetch from database and cache
+  const db_prompt = await get_prompt_by_area_and_key(...);
+  if (db_prompt) {
+    cache.set(db_prompt);
+  }
+}
+
+// Invalidate specific entry after updates
 cache.invalidate('marketing', 'greeting');
+
+// Clear entire cache
+cache.clear();
+
+// Get cache statistics
+const stats = cache.get_stats();
+console.log(`Hit rate: ${stats.hit_rate}%`);
+console.log(`Cache size: ${stats.size}/${stats.max_size}`);
 ```
+
+**Cache Key Format:**
+- Format: `{prompt_area}:{prompt_key}`
+- Example: `marketing:greeting`, `notifications:order_ready`
+
+**Eviction Policy:**
+- **TTL Expiration**: Entries older than `ttl_ms` are removed
+- **LRU Eviction**: When cache is full, least recently accessed entry is removed
+- **Manual**: Call `invalidate()` or `clear()`
+
+**Default Configuration:**
+- TTL: 5 minutes (300,000 ms)
+- Max Size: 100 entries
+- Enabled: true
 
 ## Future Considerations
 

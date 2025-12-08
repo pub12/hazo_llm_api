@@ -171,6 +171,91 @@ function MyPage() {
 
 ---
 
+## Database Setup
+
+### Auto-Initialization
+
+The database is **automatically initialized** when you import the package. No manual setup is required for basic usage.
+
+```typescript
+// Database initializes automatically on import
+import { hazo_llm_text_text } from 'hazo_llm_api/server';
+
+// The prompt_library.sqlite file is created automatically in your project root
+```
+
+### SQLite Database
+
+**File**: `prompt_library.sqlite` (created in project root)
+
+**Schema**: The `prompts_library` table is created automatically:
+
+```sql
+CREATE TABLE prompts_library (
+  uuid TEXT PRIMARY KEY,
+  prompt_area TEXT NOT NULL,
+  prompt_key TEXT NOT NULL,
+  prompt_text TEXT NOT NULL,
+  prompt_variables TEXT DEFAULT '[]',
+  prompt_notes TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  changed_by TEXT DEFAULT NULL
+);
+
+CREATE INDEX idx_prompts_area_key
+  ON prompts_library(prompt_area, prompt_key);
+```
+
+### Manual Database Operations
+
+You can manually manage the database if needed:
+
+```typescript
+import {
+  initialize_database,
+  insert_prompt,
+  update_prompt,
+  delete_prompt,
+  get_prompt_by_area_and_key,
+} from 'hazo_llm_api/server';
+
+// Manual initialization (if needed)
+await initialize_database('custom_path.sqlite', logger);
+
+// Insert a prompt
+await insert_prompt({
+  prompt_area: 'marketing',
+  prompt_key: 'greeting',
+  prompt_text: 'Hello $name, welcome to our service!',
+  prompt_variables: JSON.stringify(['name']),
+  prompt_notes: 'Standard greeting message',
+}, logger);
+
+// Update a prompt
+await update_prompt(
+  'marketing',
+  'greeting',
+  {
+    prompt_text: 'Hi $name, welcome back!',
+    prompt_notes: 'Updated greeting',
+  },
+  logger
+);
+
+// Delete a prompt
+await delete_prompt('marketing', 'greeting', logger);
+```
+
+### PostgreSQL Support
+
+PostgreSQL is not currently supported. The package uses sql.js (SQLite) for:
+- Zero external dependencies
+- Easy deployment
+- No server setup required
+- File-based storage
+
+If you need PostgreSQL support, please open a feature request on GitHub.
+
 ## Troubleshooting Checklist
 
 - [ ] Config file is named exactly `hazo_llm_api_config.ini`
@@ -180,6 +265,8 @@ function MyPage() {
 - [ ] Provider is listed in `enabled_llms` array
 - [ ] `primary_llm` is set to a valid, enabled provider
 - [ ] Next.js has `transpilePackages: ['hazo_llm_api']` configured
+- [ ] Database file has write permissions
+- [ ] SQLite path in config points to a writable location
 
 ---
 

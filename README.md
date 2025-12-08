@@ -16,10 +16,13 @@ A wrapper package for calling different LLMs with built-in prompt management and
 | `hazo_llm_image_image_text` | Images + Prompts | Image + Text | Chain image transformations then describe (chained) |
 
 **Features:**
-- **Prompt Management**: Store and retrieve prompts from a SQLite database
+- **Multi-Provider Support**: Use Gemini, Qwen, or add your own LLM providers
+- **Prompt Management**: Store and retrieve prompts from a SQLite database with LRU caching
 - **Variable Substitution**: Replace `$variables` in prompts with dynamic values
 - **Multi-modal Support**: Handle text and images seamlessly
-- **Extensible Architecture**: Provider-based design (currently Gemini)
+- **Extensible Architecture**: Provider-based design with simple registration system
+- **Type-Safe**: Full TypeScript support with comprehensive type definitions
+- **Auto-Initialization**: Database initializes automatically on import
 
 ## Installation
 
@@ -29,28 +32,54 @@ npm install hazo_llm_api
 
 ## Quick Start
 
-### 1. Initialize the LLM API
+### 1. Set Up Configuration
+
+Create `hazo_llm_api_config.ini` in your project root:
+
+```ini
+[llm]
+enabled_llms=["gemini", "qwen"]
+primary_llm=gemini
+sqlite_path=prompt_library.sqlite
+
+[llm_gemini]
+api_url=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent
+api_url_image=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent
+capabilities=["text_text", "image_text", "text_image", "image_image"]
+image_temperature=0.1
+```
+
+Create `.env.local` with your API keys:
+
+```bash
+GEMINI_API_KEY=your_api_key_here
+QWEN_API_KEY=your_qwen_api_key_here
+```
+
+### 2. Initialize the LLM API
 
 ```typescript
-import { 
-  initialize_llm_api, 
+import {
+  initialize_llm_api,
   hazo_llm_text_text,
   hazo_llm_image_text,
   hazo_llm_text_image,
   hazo_llm_image_image,
 } from 'hazo_llm_api/server';
 
-// Initialize with your configuration
-await initialize_llm_api({
-  llm_model: 'gemini',
-  logger: your_winston_logger,
-  api_url: 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
-  api_key: process.env.GEMINI_API_KEY,
-  sqlite_path: '/prompt_library.sqlite',
-});
+// Create a logger (Winston-compatible)
+const logger = {
+  error: console.error,
+  info: console.log,
+  warn: console.warn,
+  debug: console.debug,
+};
+
+// Initialize - reads config from hazo_llm_api_config.ini
+await initialize_llm_api({ logger });
 ```
 
-### 2. Text → Text (Standard Generation)
+### 3. Text → Text (Standard Generation)
 
 ```typescript
 const response = await hazo_llm_text_text({
@@ -62,7 +91,7 @@ if (response.success) {
 }
 ```
 
-### 3. Image → Text (Image Analysis)
+### 4. Image → Text (Image Analysis)
 
 ```typescript
 const response = await hazo_llm_image_text({
@@ -76,7 +105,7 @@ if (response.success) {
 }
 ```
 
-### 4. Text → Image (Image Generation)
+### 5. Text → Image (Image Generation)
 
 ```typescript
 const response = await hazo_llm_text_image({
@@ -89,7 +118,7 @@ if (response.success && response.image_b64) {
 }
 ```
 
-### 5. Image → Image (Single Image Transformation)
+### 6. Image → Image (Single Image Transformation)
 
 ```typescript
 const response = await hazo_llm_image_image({
@@ -103,7 +132,7 @@ if (response.success && response.image_b64) {
 }
 ```
 
-### 6. Multiple Images → Image (Combine Images)
+### 7. Multiple Images → Image (Combine Images)
 
 ```typescript
 const response = await hazo_llm_image_image({
@@ -119,7 +148,7 @@ if (response.success && response.image_b64) {
 }
 ```
 
-### 7. Text → Image → Text (Chained)
+### 8. Text → Image → Text (Chained)
 
 ```typescript
 const response = await hazo_llm_text_image_text({
@@ -133,7 +162,7 @@ if (response.success) {
 }
 ```
 
-### 8. Images → Image → Text (Multi-Step Chain)
+### 9. Images → Image → Text (Multi-Step Chain)
 
 ```typescript
 const response = await hazo_llm_image_image_text({
@@ -169,18 +198,20 @@ if (response.success) {
 
 Initialize the LLM API. Must be called before using any other functions.
 
+Configuration is read from `hazo_llm_api_config.ini` file, which should be in your project root.
+
 #### LLMApiConfig
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `llm_model` | string | No | `"gemini"` | LLM provider to use |
-| `logger` | Logger | Yes | - | Winston logger instance |
-| `api_url` | string | Yes | - | LLM API endpoint URL (for text output) |
-| `api_url_image` | string | No | `api_url` | LLM API endpoint URL for image output |
-| `api_key` | string | Yes | - | API key for authentication |
-| `sqlite_path` | string | No | `"/prompt_library.sqlite"` | Path to SQLite database |
+| `logger` | Logger | Yes | - | Winston-compatible logger instance |
+| `sqlite_path` | string | No | From config file | Path to SQLite database |
+| `api_url` | string | No | - | Legacy: API endpoint URL (deprecated, use config file) |
+| `api_url_image` | string | No | - | Legacy: Image API endpoint (deprecated, use config file) |
+| `api_key` | string | No | - | Legacy: API key (deprecated, use .env.local) |
+| `llm_model` | string | No | From config file | Legacy: Provider name (deprecated, use config file) |
 
-**Note:** `api_url_image` should point to an image-capable model (e.g., `gemini-2.5-flash-image`) for functions that output images (`hazo_llm_text_image`, `hazo_llm_image_image`).
+**Note:** The config file approach is recommended over passing configuration directly. This keeps sensitive API keys out of your codebase.
 
 ---
 
@@ -312,6 +343,59 @@ interface LLMResponse {
   raw_response?: unknown;     // Raw API response
 }
 ```
+
+## Using Specific LLM Providers
+
+By default, all functions use the `primary_llm` configured in your config file. You can override this per-call:
+
+```typescript
+// Use Gemini explicitly
+const response1 = await hazo_llm_text_text(
+  { prompt: 'Hello world' },
+  'gemini'
+);
+
+// Use Qwen explicitly
+const response2 = await hazo_llm_text_text(
+  { prompt: 'Hello world' },
+  'qwen'
+);
+
+// Use primary LLM (from config)
+const response3 = await hazo_llm_text_text(
+  { prompt: 'Hello world' }
+);
+```
+
+### Provider Configuration
+
+Each provider has its own section in `hazo_llm_api_config.ini`:
+
+```ini
+[llm_gemini]
+api_url=https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent
+api_url_image=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent
+capabilities=["text_text", "image_text", "text_image", "image_image"]
+text_temperature=0.7
+image_temperature=0.1
+
+[llm_qwen]
+api_url=https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions
+model_text_text=qwen-max
+model_image_text=qwen-vl-max
+capabilities=["text_text", "image_text"]
+text_temperature=0.8
+```
+
+### Supported Providers
+
+| Provider | Capabilities | Configuration Required |
+|----------|-------------|------------------------|
+| Gemini | text_text, image_text, text_image, image_image | GEMINI_API_KEY in .env.local |
+| Qwen | text_text, image_text, text_image, image_image | QWEN_API_KEY in .env.local |
+| Custom | Define your own | Implement LLMProvider interface |
+
+See `TECHDOC.md` for instructions on adding custom providers.
 
 ## Prompt Management
 
