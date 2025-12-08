@@ -1,6 +1,6 @@
 {
   "name": "hazo_llm_api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Wrapper to call different LLMs and includes prompt management",
   "keywords": [
     "LLM",
