@@ -56,7 +56,9 @@ export async function hazo_llm_image_image(
   config: LLMApiConfig,
   llm?: string
 ): Promise<LLMResponse> {
-  const logger = config.logger;
+  // Use default logger if not provided
+  const { default_logger } = await import('./index.js');
+  const logger = config.logger || default_logger;
 
   try {
     log_api_start(API_NAME, FILE_NAME, logger);

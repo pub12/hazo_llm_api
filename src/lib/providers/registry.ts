@@ -10,6 +10,7 @@ import type {
   LLMCapabilities,
   ServiceType,
   LLMProviderConfig,
+  ProviderName,
 } from './types.js';
 import type { Logger } from '../llm_api/types.js';
 
@@ -80,12 +81,12 @@ export function is_llm_enabled(name: string): boolean {
 
 /**
  * Get a provider by name
- * @param name - Provider name (case-insensitive)
+ * @param name - Provider name (case-insensitive). Use LLM_PROVIDERS constants for type safety.
  * @param logger - Logger instance for error logging
  * @returns Provider instance or null if not found
  */
 export function get_provider(
-  name: string | null | undefined,
+  name: ProviderName | null | undefined,
   logger: Logger
 ): LLMProvider | null {
   // Use primary LLM if name not specified

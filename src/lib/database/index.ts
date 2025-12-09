@@ -11,6 +11,10 @@ export {
   insert_prompt,
   update_prompt,
   delete_prompt,
+  // Path helpers
+  get_default_sqlite_path,
+  expand_path,
+  resolve_sqlite_path,
 } from './init_database.js';
 
 export {

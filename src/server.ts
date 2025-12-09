@@ -25,8 +25,18 @@ export {
   hazo_llm_image_image,
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
+  // Streaming functions
+  hazo_llm_text_text_stream,
+  hazo_llm_image_text_stream,
   is_initialized,
   get_current_config,
+  // Logger utilities
+  default_logger,
+  get_logger,
+  set_logger,
+  // Hooks utilities
+  get_hooks,
+  set_hooks,
 } from './lib/llm_api/index.js';
 
 // =============================================================================
@@ -39,6 +49,10 @@ export {
   insert_prompt,
   update_prompt,
   delete_prompt,
+  // Path helpers
+  get_default_sqlite_path,
+  expand_path,
+  resolve_sqlite_path,
 } from './lib/database/index.js';
 
 // =============================================================================
@@ -64,6 +78,19 @@ export {
 } from './lib/providers/index.js';
 
 // =============================================================================
+// Provider Constants (Type-safe provider names)
+// =============================================================================
+export { LLM_PROVIDERS, SERVICE_TYPES } from './lib/providers/types.js';
+export type { ProviderName, ServiceType } from './lib/providers/types.js';
+
+// =============================================================================
+// Error Handling Exports
+// =============================================================================
+export { LLM_ERROR_CODES } from './lib/llm_api/types.js';
+export { build_error_response } from './lib/llm_api/provider_helper.js';
+export type { LLMErrorCode, LLMError } from './lib/llm_api/types.js';
+
+// =============================================================================
 // Type Re-exports
 // =============================================================================
 export type {
@@ -84,5 +111,16 @@ export type {
   PromptTextMode,
   PromptRecord,
   CallLLMParams,
+  // Hook types
+  LLMHooks,
+  LLMRequestContext,
+  LLMResponseContext,
+  LLMErrorContext,
+  BeforeRequestHook,
+  AfterResponseHook,
+  OnErrorHook,
+  // Streaming types
+  LLMStreamChunk,
+  LLMStreamResponse,
 } from './lib/llm_api/types.js';
 

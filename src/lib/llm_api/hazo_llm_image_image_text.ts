@@ -41,8 +41,10 @@ export async function hazo_llm_image_image_text(
   llm?: string
 ): Promise<LLMResponse> {
   const file_name = 'hazo_llm_image_image_text.ts';
-  const logger = config.logger;
-  
+  // Use default logger if not provided
+  const { default_logger } = await import('./index.js');
+  const logger = config.logger || default_logger;
+
   const api_name = 'image_image_text';
   
   try {

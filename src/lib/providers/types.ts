@@ -7,12 +7,51 @@
 
 import type {
   LLMResponse,
+  LLMStreamResponse,
   TextTextParams,
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
   Logger,
 } from '../llm_api/types.js';
+
+// =============================================================================
+// Provider Name Constants
+// =============================================================================
+
+/**
+ * Provider name constants for type-safe LLM provider selection
+ * Use these constants instead of string literals for autocomplete and type safety
+ *
+ * @example
+ * ```typescript
+ * import { LLM_PROVIDERS } from 'hazo_llm_api/server';
+ *
+ * const response = await hazo_llm_text_text(params, LLM_PROVIDERS.GEMINI);
+ * ```
+ */
+export const LLM_PROVIDERS = {
+  GEMINI: 'gemini',
+  QWEN: 'qwen',
+} as const;
+
+/**
+ * Type for provider name - union of all valid provider names
+ * Accepts both constants and string literals for backward compatibility
+ *
+ * @example
+ * ```typescript
+ * // Using constant (recommended)
+ * const provider: ProviderName = LLM_PROVIDERS.GEMINI;
+ *
+ * // Using string literal (still works)
+ * const provider: ProviderName = 'gemini';
+ *
+ * // Custom provider (also valid)
+ * const provider: ProviderName = 'my-custom-provider';
+ * ```
+ */
+export type ProviderName = typeof LLM_PROVIDERS[keyof typeof LLM_PROVIDERS] | (string & {});
 
 // =============================================================================
 // Service Type Constants
@@ -98,12 +137,36 @@ export interface LLMProvider {
   /**
    * Image input → Image output
    * Transform/edit an image based on instructions
-   * 
+   *
    * @param params - Image input parameters with transformation instructions
    * @param logger - Logger instance
    * @returns LLM response with transformed image
    */
   image_image(params: ImageImageParams, logger: Logger): Promise<LLMResponse>;
+
+  // =========================================================================
+  // Streaming Methods (Optional)
+  // =========================================================================
+
+  /**
+   * Text input → Text output (streaming)
+   * Generate text from a text prompt with streaming response
+   *
+   * @param params - Text input parameters
+   * @param logger - Logger instance
+   * @returns Async generator yielding text chunks
+   */
+  text_text_stream?(params: TextTextParams, logger: Logger): Promise<LLMStreamResponse>;
+
+  /**
+   * Image input → Text output (streaming)
+   * Analyze an image and generate text description with streaming response
+   *
+   * @param params - Image input parameters
+   * @param logger - Logger instance
+   * @returns Async generator yielding text chunks
+   */
+  image_text_stream?(params: ImageTextParams, logger: Logger): Promise<LLMStreamResponse>;
 }
 
 // =============================================================================

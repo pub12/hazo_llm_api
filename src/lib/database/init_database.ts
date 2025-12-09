@@ -9,9 +9,107 @@
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { randomUUID } from 'crypto';
 import type { Logger, PromptRecord } from '../llm_api/types.js';
 import { row_to_prompt_record } from './utils.js';
+
+// =============================================================================
+// Path Helpers
+// =============================================================================
+
+/**
+ * Default SQLite database filename
+ */
+const DEFAULT_SQLITE_FILENAME = 'prompt_library.sqlite';
+
+/**
+ * Get the default SQLite database path
+ * Returns an absolute path relative to the current working directory
+ *
+ * @returns Default database path: "{process.cwd()}/prompt_library.sqlite"
+ *
+ * @example
+ * ```typescript
+ * import { get_default_sqlite_path } from 'hazo_llm_api/server';
+ *
+ * const path = get_default_sqlite_path();
+ * // Returns: "/path/to/your/app/prompt_library.sqlite"
+ * ```
+ */
+export function get_default_sqlite_path(): string {
+  return path.join(process.cwd(), DEFAULT_SQLITE_FILENAME);
+}
+
+/**
+ * Expand tilde (~) in path to user's home directory
+ * Also supports environment variables in the format ${VAR_NAME}
+ *
+ * @param file_path - Path that may contain ~ or environment variables
+ * @returns Expanded path
+ *
+ * @example
+ * ```typescript
+ * import { expand_path } from 'hazo_llm_api/server';
+ *
+ * expand_path('~/data/prompts.db');
+ * // Returns: "/Users/username/data/prompts.db"
+ *
+ * expand_path('${HOME}/data/prompts.db');
+ * // Returns: "/Users/username/data/prompts.db"
+ * ```
+ */
+export function expand_path(file_path: string): string {
+  let expanded = file_path;
+
+  // Expand tilde to home directory
+  if (expanded.startsWith('~')) {
+    expanded = path.join(os.homedir(), expanded.slice(1));
+  }
+
+  // Expand environment variables ${VAR_NAME}
+  expanded = expanded.replace(/\$\{([^}]+)\}/g, (_, var_name) => {
+    return process.env[var_name] || '';
+  });
+
+  // Also support $VAR_NAME format (common in Unix)
+  expanded = expanded.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, var_name) => {
+    return process.env[var_name] || '';
+  });
+
+  return expanded;
+}
+
+/**
+ * Resolve a database path to an absolute path
+ * Handles tilde expansion, environment variables, and relative paths
+ *
+ * @param sqlite_path - Path to resolve (can be relative, absolute, or contain ~/$VAR)
+ * @returns Absolute path to the database file
+ *
+ * @example
+ * ```typescript
+ * import { resolve_sqlite_path } from 'hazo_llm_api/server';
+ *
+ * resolve_sqlite_path('prompt_library.sqlite');
+ * // Returns: "/path/to/cwd/prompt_library.sqlite"
+ *
+ * resolve_sqlite_path('~/data/prompts.db');
+ * // Returns: "/Users/username/data/prompts.db"
+ *
+ * resolve_sqlite_path('/absolute/path/prompts.db');
+ * // Returns: "/absolute/path/prompts.db"
+ * ```
+ */
+export function resolve_sqlite_path(sqlite_path: string): string {
+  // First expand any special characters
+  const expanded = expand_path(sqlite_path);
+
+  // Then resolve to absolute path if needed
+  return path.isAbsolute(expanded)
+    ? expanded
+    : path.join(process.cwd(), expanded);
+}
 
 // =============================================================================
 // Database Instance

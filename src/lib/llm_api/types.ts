@@ -5,7 +5,7 @@
  * Includes configuration, function parameters, and response types.
  */
 
-import type { ServiceType } from '../providers/types.js';
+import type { ServiceType, ProviderName } from '../providers/types.js';
 
 // =============================================================================
 // Logger Interface
@@ -29,7 +29,9 @@ export interface Logger {
 /**
  * Gemini API generation configuration parameters
  * All parameters are optional - only include in API calls if explicitly set
- * @deprecated Use provider-specific generation configs instead
+ *
+ * Note: This is used internally by the Gemini provider.
+ * Configure via hazo_llm_api_config.ini [llm_gemini] section instead of passing directly.
  */
 export interface GeminiGenerationConfig {
   /** Controls randomness in output (0.0-2.0). Lower = more deterministic */
@@ -54,54 +56,145 @@ export interface GeminiGenerationConfig {
   response_mime_type?: string;
 }
 
+// =============================================================================
+// Hook Types
+// =============================================================================
+
+/**
+ * Context passed to beforeRequest hook
+ */
+export interface LLMRequestContext {
+  /** Service type being called */
+  service_type: ServiceType;
+
+  /** Provider name */
+  provider: string;
+
+  /** Request parameters (type varies by service) */
+  params: Record<string, unknown>;
+
+  /** Timestamp when request started */
+  timestamp: Date;
+}
+
+/**
+ * Context passed to afterResponse hook
+ */
+export interface LLMResponseContext extends LLMRequestContext {
+  /** The response from the LLM */
+  response: LLMResponse;
+
+  /** Duration of the request in milliseconds */
+  duration_ms: number;
+}
+
+/**
+ * Context passed to onError hook
+ */
+export interface LLMErrorContext extends LLMRequestContext {
+  /** The error that occurred */
+  error: LLMError;
+
+  /** Duration until error in milliseconds */
+  duration_ms: number;
+}
+
+/**
+ * Hook function called before each LLM request
+ * Can be async for logging to external services
+ */
+export type BeforeRequestHook = (context: LLMRequestContext) => void | Promise<void>;
+
+/**
+ * Hook function called after each successful LLM response
+ * Can be async for logging/analytics
+ */
+export type AfterResponseHook = (context: LLMResponseContext) => void | Promise<void>;
+
+/**
+ * Hook function called when an error occurs
+ * Can be async for error reporting
+ */
+export type OnErrorHook = (context: LLMErrorContext) => void | Promise<void>;
+
+/**
+ * Lifecycle hooks for LLM API calls
+ * All hooks are optional and can be async
+ *
+ * @example
+ * ```typescript
+ * await initialize_llm_api({
+ *   hooks: {
+ *     beforeRequest: (ctx) => {
+ *       console.log(`Calling ${ctx.provider}.${ctx.service_type}`);
+ *     },
+ *     afterResponse: (ctx) => {
+ *       console.log(`Response in ${ctx.duration_ms}ms`);
+ *     },
+ *     onError: (ctx) => {
+ *       console.error(`Error: ${ctx.error.code}`);
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface LLMHooks {
+  /** Called before each LLM request */
+  beforeRequest?: BeforeRequestHook;
+
+  /** Called after each successful LLM response */
+  afterResponse?: AfterResponseHook;
+
+  /** Called when an error occurs */
+  onError?: OnErrorHook;
+}
+
+// =============================================================================
+// LLM API Configuration
+// =============================================================================
+
 /**
  * Configuration options for initializing the LLM API
  * Supports provider-based architecture where providers are loaded from config file
+ *
+ * All configuration fields are optional - the API will use sensible defaults:
+ * - logger: Default console logger
+ * - sqlite_path: From config file or "prompt_library.sqlite" in cwd
+ * - hooks: None
+ *
+ * @example
+ * ```typescript
+ * // Minimal initialization
+ * await initialize_llm_api({});
+ *
+ * // With custom logger and hooks
+ * await initialize_llm_api({
+ *   logger: myLogger,
+ *   hooks: {
+ *     beforeRequest: (ctx) => console.log(`Calling ${ctx.provider}`),
+ *   },
+ * });
+ * ```
  */
 export interface LLMApiConfig {
-  /** Winston logger instance from parent application */
-  logger: Logger;
-  
-  /** Path to SQLite database file (default: "/prompt_library.sqlite" relative to app root) */
+  /**
+   * Logger instance from parent application
+   * Optional - if not provided, uses default console logger
+   */
+  logger?: Logger;
+
+  /**
+   * Path to SQLite database file
+   * Supports: relative paths, absolute paths, ~ expansion, environment variables
+   * Default: "prompt_library.sqlite" (relative to process.cwd())
+   */
   sqlite_path?: string;
-  
-  /** 
-   * Legacy: URL of the LLM API endpoint (for backward compatibility)
-   * Providers now load URLs from config file
-   * @deprecated Providers load API URLs from config file
+
+  /**
+   * Lifecycle hooks for monitoring, logging, and analytics
+   * Optional - hooks are called at various points during LLM API calls
    */
-  api_url?: string;
-  
-  /** 
-   * Legacy: URL of the LLM API endpoint for image generation (for backward compatibility)
-   * @deprecated Providers load API URLs from config file
-   */
-  api_url_image?: string;
-  
-  /** 
-   * Legacy: API key for authentication (for backward compatibility)
-   * Providers now load API keys from .env.local
-   * @deprecated API keys are loaded from .env.local per provider
-   */
-  api_key?: string;
-  
-  /** 
-   * Legacy: LLM model to use (for backward compatibility)
-   * @deprecated Use provider registry instead, enabled_llms and primary_llm come from config
-   */
-  llm_model?: string;
-  
-  /** 
-   * Legacy: Generation config for text API calls (for backward compatibility)
-   * @deprecated Use provider-specific configs from config file
-   */
-  gemini_text_config?: GeminiGenerationConfig;
-  
-  /** 
-   * Legacy: Generation config for image API calls (for backward compatibility)
-   * @deprecated Use provider-specific configs from config file
-   */
-  gemini_image_config?: GeminiGenerationConfig;
+  hooks?: LLMHooks;
 }
 
 // =============================================================================
@@ -203,6 +296,73 @@ export interface PromptRecord {
 }
 
 // =============================================================================
+// LLM Error Types
+// =============================================================================
+
+/**
+ * Error codes for LLM API errors
+ * Use these codes for programmatic error handling
+ *
+ * @example
+ * ```typescript
+ * import { LLM_ERROR_CODES } from 'hazo_llm_api/server';
+ *
+ * if (response.error_info?.code === LLM_ERROR_CODES.RATE_LIMITED) {
+ *   // Implement retry logic
+ * }
+ * ```
+ */
+export const LLM_ERROR_CODES = {
+  /** Provider not found in registry */
+  PROVIDER_NOT_FOUND: 'PROVIDER_NOT_FOUND',
+  /** Provider is not enabled in configuration */
+  PROVIDER_NOT_ENABLED: 'PROVIDER_NOT_ENABLED',
+  /** Provider does not support the requested service type */
+  CAPABILITY_NOT_SUPPORTED: 'CAPABILITY_NOT_SUPPORTED',
+  /** API key is missing or invalid */
+  API_KEY_MISSING: 'API_KEY_MISSING',
+  /** Rate limit exceeded */
+  RATE_LIMITED: 'RATE_LIMITED',
+  /** Network error (connection failed, timeout, etc.) */
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  /** Invalid request parameters */
+  INVALID_REQUEST: 'INVALID_REQUEST',
+  /** API returned an error */
+  API_ERROR: 'API_ERROR',
+  /** Request timed out */
+  TIMEOUT: 'TIMEOUT',
+  /** Database error */
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  /** Prompt not found */
+  PROMPT_NOT_FOUND: 'PROMPT_NOT_FOUND',
+  /** Unknown/unexpected error */
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+/**
+ * Type for LLM error codes
+ */
+export type LLMErrorCode = typeof LLM_ERROR_CODES[keyof typeof LLM_ERROR_CODES];
+
+/**
+ * Structured error information for LLM API responses
+ * Provides detailed error information for programmatic handling
+ */
+export interface LLMError {
+  /** Error code for programmatic handling */
+  code: LLMErrorCode;
+
+  /** Human-readable error message */
+  message: string;
+
+  /** Whether this error is potentially retryable */
+  retryable: boolean;
+
+  /** Original error details (if applicable) */
+  details?: Record<string, unknown>;
+}
+
+// =============================================================================
 // LLM Response Types
 // =============================================================================
 
@@ -212,22 +372,71 @@ export interface PromptRecord {
 export interface LLMResponse {
   /** Whether the API call was successful */
   success: boolean;
-  
+
   /** The generated text response from the LLM */
   text?: string;
-  
-  /** Error message if the call failed */
+
+  /**
+   * Error message if the call failed
+   * @deprecated Use error_info for structured error data
+   */
   error?: string;
-  
+
+  /** Structured error information (new in v2.0) */
+  error_info?: LLMError;
+
   /** Raw response from the API */
   raw_response?: unknown;
-  
+
   /** Base64 encoded image data (for image output functions) */
   image_b64?: string;
-  
+
   /** MIME type of the generated image */
   image_mime_type?: string;
 }
+
+// =============================================================================
+// Streaming Types
+// =============================================================================
+
+/**
+ * A single chunk from a streaming LLM response
+ */
+export interface LLMStreamChunk {
+  /** The text content of this chunk */
+  text: string;
+
+  /** Whether this is the final chunk */
+  done: boolean;
+
+  /**
+   * Error message if streaming failed
+   * @deprecated Use error_info for structured error data
+   */
+  error?: string;
+
+  /** Structured error information if streaming failed */
+  error_info?: LLMError;
+}
+
+/**
+ * Async iterator for streaming LLM responses
+ *
+ * @example
+ * ```typescript
+ * const stream = await hazo_llm_text_text_stream({ prompt: 'Hello' });
+ *
+ * for await (const chunk of stream) {
+ *   if (chunk.error) {
+ *     console.error(chunk.error);
+ *     break;
+ *   }
+ *   process.stdout.write(chunk.text);
+ *   if (chunk.done) break;
+ * }
+ * ```
+ */
+export type LLMStreamResponse = AsyncGenerator<LLMStreamChunk, void, unknown>;
 
 // =============================================================================
 // Specialized Function Parameter Types
@@ -449,26 +658,26 @@ export interface GeminiApiResponse {
 export interface LLMApiClient {
   /** Configuration used to initialize the client */
   config: LLMApiConfig;
-  
+
   /** Whether the database has been initialized */
   db_initialized: boolean;
-  
+
   /** Text input → Text output */
-  hazo_llm_text_text: (params: TextTextParams, llm?: string) => Promise<LLMResponse>;
-  
+  hazo_llm_text_text: (params: TextTextParams, llm?: ProviderName) => Promise<LLMResponse>;
+
   /** Image input → Text output (image analysis) */
-  hazo_llm_image_text: (params: ImageTextParams, llm?: string) => Promise<LLMResponse>;
-  
+  hazo_llm_image_text: (params: ImageTextParams, llm?: ProviderName) => Promise<LLMResponse>;
+
   /** Text input → Image output (image generation) */
-  hazo_llm_text_image: (params: TextImageParams, llm?: string) => Promise<LLMResponse>;
-  
+  hazo_llm_text_image: (params: TextImageParams, llm?: ProviderName) => Promise<LLMResponse>;
+
   /** Image input → Image output (image transformation) */
-  hazo_llm_image_image: (params: ImageImageParams, llm?: string) => Promise<LLMResponse>;
-  
+  hazo_llm_image_image: (params: ImageImageParams, llm?: ProviderName) => Promise<LLMResponse>;
+
   /** Text → Image → Text (generate image then analyze it) */
-  hazo_llm_text_image_text: (params: TextImageTextParams, llm?: string) => Promise<LLMResponse>;
-  
+  hazo_llm_text_image_text: (params: TextImageTextParams, llm?: ProviderName) => Promise<LLMResponse>;
+
   /** Images → Image → Text (chain image transformations then describe) */
-  hazo_llm_image_image_text: (params: ImageImageTextParams, llm?: string) => Promise<LLMResponse>;
+  hazo_llm_image_image_text: (params: ImageImageTextParams, llm?: ProviderName) => Promise<LLMResponse>;
 }
 

@@ -17,6 +17,8 @@ import type {
   LLMApiConfig,
   LLMApiClient,
   LLMResponse,
+  LLMStreamResponse,
+  LLMStreamChunk,
   TextTextParams,
   ImageTextParams,
   TextImageParams,
@@ -26,6 +28,7 @@ import type {
   Logger,
   GeminiGenerationConfig,
 } from './types.js';
+import { LLM_ERROR_CODES } from './types.js';
 import { initialize_database, get_database } from '../database/init_database.js';
 import { hazo_llm_text_text as hazo_llm_text_text_internal } from './hazo_llm_text_text.js';
 import { hazo_llm_image_text as hazo_llm_image_text_internal } from './hazo_llm_image_text.js';
@@ -40,11 +43,12 @@ import {
   set_primary_llm,
   get_primary_llm,
   get_registered_providers,
+  get_provider,
 } from '../providers/registry.js';
 import { GeminiProvider, type GeminiProviderConfig } from '../providers/gemini/index.js';
 import { QwenProvider, type QwenProviderConfig, type QwenGenerationConfig } from '../providers/qwen/index.js';
-import type { ServiceType } from '../providers/types.js';
-import { SERVICE_TYPES } from '../providers/types.js';
+import type { ServiceType, ProviderName } from '../providers/types.js';
+import { SERVICE_TYPES, LLM_PROVIDERS } from '../providers/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
@@ -58,13 +62,14 @@ let db_auto_initialized = false;
 let current_config: LLMApiConfig | null = null;
 
 // =============================================================================
-// Default Logger (for auto-initialization)
+// Default Logger
 // =============================================================================
 
 /**
- * Default console logger for auto-initialization when no custom logger provided
+ * Default console logger used when no custom logger is provided
+ * Can be used directly or as a fallback in functions
  */
-const default_logger: Logger = {
+export const default_logger: Logger = {
   error: (message: string, meta?: Record<string, unknown>) => {
     console.error(`[HAZO_LLM_API ERROR] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
   },
@@ -78,6 +83,63 @@ const default_logger: Logger = {
     console.debug(`[HAZO_LLM_API DEBUG] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
   },
 };
+
+/**
+ * Stored logger instance - set during initialization
+ */
+let stored_logger: Logger = default_logger;
+
+/**
+ * Stored hooks instance - set during initialization
+ */
+let stored_hooks: import('./types.js').LLMHooks = {};
+
+/**
+ * Get the current logger instance
+ * Returns the stored logger (set during initialization) or default logger
+ *
+ * @returns Current logger instance
+ *
+ * @example
+ * ```typescript
+ * import { get_logger } from 'hazo_llm_api/server';
+ *
+ * const logger = get_logger();
+ * logger.info('My message');
+ * ```
+ */
+export function get_logger(): Logger {
+  return stored_logger;
+}
+
+/**
+ * Set the logger instance
+ * Called internally during initialization, but can also be called directly
+ *
+ * @param logger - Logger instance to use
+ */
+export function set_logger(logger: Logger): void {
+  stored_logger = logger;
+}
+
+/**
+ * Get the current hooks configuration
+ *
+ * @returns Current hooks configuration
+ */
+export function get_hooks(): import('./types.js').LLMHooks {
+  return stored_hooks;
+}
+
+/**
+ * Set the hooks configuration
+ * Called internally during initialization, but can also be called directly
+ *
+ * @param hooks - Hooks configuration to use
+ */
+export function set_hooks(hooks: import('./types.js').LLMHooks): void {
+  stored_hooks = hooks;
+}
 
 // =============================================================================
 // Config Reader
@@ -453,19 +515,21 @@ function load_gemini_provider_from_config(logger: Logger): GeminiProvider | null
     });
     return null;
   }
-  
+
   try {
     const config_content = fs.readFileSync(config_path, 'utf-8');
     const config = ini.parse(config_content);
     const gemini_section = config.llm_gemini || {};
-    
-    // Load API key from environment
-    const api_key = load_api_key_from_env('gemini');
+
+    // Support custom env var name via api_key_env config option
+    const env_var_name = gemini_section.api_key_env || 'GEMINI_API_KEY';
+    const api_key = process.env[env_var_name];
+
     if (!api_key) {
-      logger.error('GEMINI_API_KEY not found in environment variables', {
+      logger.error(`${env_var_name} not found in environment variables`, {
         file: 'index.ts',
         line: 352,
-        data: { config_path },
+        data: { config_path, env_var_name },
       });
       return null;
     }
@@ -630,19 +694,21 @@ function load_qwen_provider_from_config(logger: Logger): QwenProvider | null {
     });
     return null;
   }
-  
+
   try {
     const config_content = fs.readFileSync(config_path, 'utf-8');
     const config = ini.parse(config_content);
     const qwen_section = config.llm_qwen || {};
-    
-    // Load API key from environment
-    const api_key = load_api_key_from_env('qwen');
+
+    // Support custom env var name via api_key_env config option
+    const env_var_name = qwen_section.api_key_env || 'QWEN_API_KEY';
+    const api_key = process.env[env_var_name];
+
     if (!api_key) {
-      logger.error('QWEN_API_KEY not found in environment variables', {
+      logger.error(`${env_var_name} not found in environment variables`, {
         file: 'index.ts',
         line: 512,
-        data: { config_path },
+        data: { config_path, env_var_name },
       });
       return null;
     }
@@ -801,23 +867,45 @@ void auto_initialize_database();
 /**
  * Initialize the LLM API with the given configuration
  * Creates/connects to the database and prepares the client for use
- * 
- * @param config - Configuration options for the LLM API
+ *
+ * @param config - Configuration options for the LLM API (all fields optional)
  * @returns Initialized LLM API client
+ *
+ * @example
+ * ```typescript
+ * // Minimal initialization (uses defaults)
+ * const api = await initialize_llm_api({});
+ *
+ * // With custom logger
+ * const api = await initialize_llm_api({ logger: myLogger });
+ *
+ * // With custom database path
+ * const api = await initialize_llm_api({ sqlite_path: '~/data/prompts.db' });
+ * ```
  */
-export async function initialize_llm_api(config: LLMApiConfig): Promise<LLMApiClient> {
+export async function initialize_llm_api(config: LLMApiConfig = {}): Promise<LLMApiClient> {
   const file_name = 'index.ts (llm_api)';
-  const logger = config.logger;
-  
+
+  // Use provided logger or default
+  const logger = config.logger || default_logger;
+
+  // Store the logger for use by other functions
+  set_logger(logger);
+
+  // Store hooks if provided
+  if (config.hooks) {
+    set_hooks(config.hooks);
+  }
+
   // Get global config from file
   const global_config = get_llm_global_config();
-  
+
   // Use provided sqlite_path or fall back to config file value
   const sqlite_path = config.sqlite_path || global_config.sqlite_path;
-  
+
   // Load and register providers from config file
   load_and_register_providers(logger);
-  
+
   // Validate that primary_llm is enabled
   const primary_llm_name = get_primary_llm();
   if (!primary_llm_name) {
@@ -828,7 +916,7 @@ export async function initialize_llm_api(config: LLMApiConfig): Promise<LLMApiCl
     });
     throw new Error(error_msg);
   }
-  
+
   logger.info('Initializing LLM API', {
     file: file_name,
     line: 620,
@@ -838,24 +926,20 @@ export async function initialize_llm_api(config: LLMApiConfig): Promise<LLMApiCl
       primary_llm: primary_llm_name,
     },
   });
-  
-  // Set final config for backward compatibility (simplified)
+
+  // Set final config
   const final_config: LLMApiConfig = {
-    logger: config.logger,
+    logger,
     sqlite_path,
-    // Legacy fields kept for backward compatibility but not used by providers
-    api_url: config.api_url,
-    api_url_image: config.api_url_image,
-    api_key: config.api_key,
-    llm_model: primary_llm_name, // Use primary_llm as default
+    hooks: config.hooks,
   };
-  
+
   // Initialize the database (async)
   try {
     await initialize_database(sqlite_path, logger);
     initialized = true;
     current_config = final_config;
-    
+
     logger.info('LLM API initialized successfully', {
       file: file_name,
       line: 645,
@@ -878,22 +962,22 @@ export async function initialize_llm_api(config: LLMApiConfig): Promise<LLMApiCl
   const client: LLMApiClient = {
     config: final_config,
     db_initialized: initialized,
-    hazo_llm_text_text: async (params: TextTextParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_text_text: async (params: TextTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_text_text(params, llm);
     },
-    hazo_llm_image_text: async (params: ImageTextParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_image_text: async (params: ImageTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_image_text(params, llm);
     },
-    hazo_llm_text_image: async (params: TextImageParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_text_image: async (params: TextImageParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_text_image(params, llm);
     },
-    hazo_llm_image_image: async (params: ImageImageParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_image_image: async (params: ImageImageParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_image_image(params, llm);
     },
-    hazo_llm_text_image_text: async (params: TextImageTextParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_text_image_text: async (params: TextImageTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_text_image_text(params, llm);
     },
-    hazo_llm_image_image_text: async (params: ImageImageTextParams, llm?: string): Promise<LLMResponse> => {
+    hazo_llm_image_image_text: async (params: ImageImageTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_image_image_text(params, llm);
     },
   };
@@ -907,12 +991,17 @@ export async function initialize_llm_api(config: LLMApiConfig): Promise<LLMApiCl
 
 /**
  * Helper to check full LLM API initialization (required for LLM calls)
+ * Ensures logger is always present in returned config
  */
-function check_initialized(): LLMApiConfig {
+function check_initialized(): LLMApiConfig & { logger: Logger } {
   if (!initialized || !current_config) {
     throw new Error('LLM API not initialized. Call initialize_llm_api first.');
   }
-  return current_config;
+  // Ensure logger is always present
+  return {
+    ...current_config,
+    logger: current_config.logger || get_logger(),
+  };
 }
 
 /**
@@ -940,12 +1029,19 @@ export async function ensure_database_ready(): Promise<boolean> {
 /**
  * Text input → Text output
  * Standard text generation using LLM
- * 
+ *
  * @param params - Text input parameters
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with generated text
+ *
+ * @example
+ * ```typescript
+ * import { hazo_llm_text_text, LLM_PROVIDERS } from 'hazo_llm_api/server';
+ *
+ * const response = await hazo_llm_text_text({ prompt: 'Hello' }, LLM_PROVIDERS.GEMINI);
+ * ```
  */
-export async function hazo_llm_text_text(params: TextTextParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_text_text(params: TextTextParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
@@ -958,12 +1054,12 @@ export async function hazo_llm_text_text(params: TextTextParams, llm?: string): 
 /**
  * Image input → Text output
  * Analyze an image and get text description
- * 
+ *
  * @param params - Image input parameters
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with text description
  */
-export async function hazo_llm_image_text(params: ImageTextParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_image_text(params: ImageTextParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
@@ -976,12 +1072,12 @@ export async function hazo_llm_image_text(params: ImageTextParams, llm?: string)
 /**
  * Text input → Image output
  * Generate an image from text description
- * 
+ *
  * @param params - Text input parameters for image generation
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with generated image
  */
-export async function hazo_llm_text_image(params: TextImageParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_text_image(params: TextImageParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
@@ -994,12 +1090,12 @@ export async function hazo_llm_text_image(params: TextImageParams, llm?: string)
 /**
  * Image input → Image output
  * Transform/edit an image based on instructions
- * 
+ *
  * @param params - Image input parameters with transformation instructions
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with transformed image
  */
-export async function hazo_llm_image_image(params: ImageImageParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_image_image(params: ImageImageParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
@@ -1012,12 +1108,12 @@ export async function hazo_llm_image_image(params: ImageImageParams, llm?: strin
 /**
  * Text → Image → Text (Chained)
  * Generate an image from prompt_image, then analyze it with prompt_text
- * 
+ *
  * @param params - Parameters with two prompts: one for image gen, one for analysis
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with generated image and analysis text
  */
-export async function hazo_llm_text_image_text(params: TextImageTextParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_text_image_text(params: TextImageTextParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
@@ -1030,18 +1126,166 @@ export async function hazo_llm_text_image_text(params: TextImageTextParams, llm?
 /**
  * Images → Image → Text (Chained)
  * Chain multiple image transformations, then describe the final result
- * 
+ *
  * @param params - Parameters with images, prompts, and description prompt
- * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
  * @returns LLM response with final image and description text
  */
-export async function hazo_llm_image_image_text(params: ImageImageTextParams, llm?: string): Promise<LLMResponse> {
+export async function hazo_llm_image_image_text(params: ImageImageTextParams, llm?: ProviderName): Promise<LLMResponse> {
   try {
     const config = check_initialized();
     const db = get_database();
     return hazo_llm_image_image_text_internal(params, db, config, llm);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// =============================================================================
+// Streaming Functions
+// =============================================================================
+
+/**
+ * Text input → Text output (Streaming)
+ * Generate text from a prompt with streaming response
+ *
+ * @param params - Text input parameters
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @returns Async generator yielding text chunks
+ *
+ * @example
+ * ```typescript
+ * const stream = await hazo_llm_text_text_stream({ prompt: 'Tell me a story' });
+ *
+ * for await (const chunk of stream) {
+ *   if (chunk.error) {
+ *     console.error(chunk.error);
+ *     break;
+ *   }
+ *   process.stdout.write(chunk.text);
+ *   if (chunk.done) break;
+ * }
+ * ```
+ */
+export async function* hazo_llm_text_text_stream(
+  params: TextTextParams,
+  llm?: ProviderName
+): LLMStreamResponse {
+  try {
+    const config = check_initialized();
+    const logger = config.logger || get_logger();
+
+    // Get provider
+    const provider = get_provider(llm, logger);
+    if (!provider) {
+      yield {
+        text: '',
+        done: true,
+        error: `Provider "${llm || 'primary'}" not found`,
+        error_info: {
+          code: LLM_ERROR_CODES.PROVIDER_NOT_FOUND,
+          message: `Provider "${llm || 'primary'}" not found`,
+          retryable: false,
+        },
+      };
+      return;
+    }
+
+    // Check if provider supports streaming
+    if (!provider.text_text_stream) {
+      yield {
+        text: '',
+        done: true,
+        error: `Provider "${provider.get_name()}" does not support streaming`,
+        error_info: {
+          code: LLM_ERROR_CODES.CAPABILITY_NOT_SUPPORTED,
+          message: `Provider "${provider.get_name()}" does not support streaming for text_text`,
+          retryable: false,
+        },
+      };
+      return;
+    }
+
+    // Call streaming method
+    const stream = await provider.text_text_stream(params, logger);
+    yield* stream;
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    yield {
+      text: '',
+      done: true,
+      error: error_message,
+      error_info: {
+        code: LLM_ERROR_CODES.UNKNOWN,
+        message: error_message,
+        retryable: false,
+      },
+    };
+  }
+}
+
+/**
+ * Image input → Text output (Streaming)
+ * Analyze an image and stream text description
+ *
+ * @param params - Image input parameters
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @returns Async generator yielding text chunks
+ */
+export async function* hazo_llm_image_text_stream(
+  params: ImageTextParams,
+  llm?: ProviderName
+): LLMStreamResponse {
+  try {
+    const config = check_initialized();
+    const logger = config.logger || get_logger();
+
+    // Get provider
+    const provider = get_provider(llm, logger);
+    if (!provider) {
+      yield {
+        text: '',
+        done: true,
+        error: `Provider "${llm || 'primary'}" not found`,
+        error_info: {
+          code: LLM_ERROR_CODES.PROVIDER_NOT_FOUND,
+          message: `Provider "${llm || 'primary'}" not found`,
+          retryable: false,
+        },
+      };
+      return;
+    }
+
+    // Check if provider supports streaming
+    if (!provider.image_text_stream) {
+      yield {
+        text: '',
+        done: true,
+        error: `Provider "${provider.get_name()}" does not support streaming`,
+        error_info: {
+          code: LLM_ERROR_CODES.CAPABILITY_NOT_SUPPORTED,
+          message: `Provider "${provider.get_name()}" does not support streaming for image_text`,
+          retryable: false,
+        },
+      };
+      return;
+    }
+
+    // Call streaming method
+    const stream = await provider.image_text_stream(params, logger);
+    yield* stream;
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    yield {
+      text: '',
+      done: true,
+      error: error_message,
+      error_info: {
+        code: LLM_ERROR_CODES.UNKNOWN,
+        message: error_message,
+        retryable: false,
+      },
+    };
   }
 }
 
@@ -1058,18 +1302,17 @@ export function is_initialized(): boolean {
 }
 
 /**
- * Get the current configuration (without sensitive data)
+ * Get the current configuration (without sensitive logger)
  * @returns Current configuration or null if not initialized
  */
-export function get_current_config(): Omit<LLMApiConfig, 'api_key' | 'logger'> | null {
+export function get_current_config(): Omit<LLMApiConfig, 'logger'> | null {
   if (!current_config) {
     return null;
   }
-  
+
   return {
-    llm_model: current_config.llm_model,
     sqlite_path: current_config.sqlite_path,
-    api_url: current_config.api_url,
+    hooks: current_config.hooks,
   };
 }
 

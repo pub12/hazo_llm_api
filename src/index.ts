@@ -13,6 +13,18 @@
 export * from './components/index.js';
 
 // =============================================================================
+// Provider Constants (Type-safe provider names - safe for client)
+// =============================================================================
+export { LLM_PROVIDERS, SERVICE_TYPES } from './lib/providers/types.js';
+export type { ProviderName, ServiceType } from './lib/providers/types.js';
+
+// =============================================================================
+// Error Constants (safe for client)
+// =============================================================================
+export { LLM_ERROR_CODES } from './lib/llm_api/types.js';
+export type { LLMErrorCode, LLMError } from './lib/llm_api/types.js';
+
+// =============================================================================
 // Type exports (safe for both client and server)
 // =============================================================================
 export type {
