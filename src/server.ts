@@ -1,17 +1,18 @@
 /**
  * hazo_llm_api Server-Side Exports
- * 
+ *
  * This file exports server-side only functions for LLM API operations.
  * These should ONLY be imported in server components, API routes, or server actions.
- * 
+ *
  * Usage: import { initialize_llm_api, hazo_llm_text_text } from 'hazo_llm_api/server'
- * 
+ *
  * Available functions:
  * - hazo_llm_text_text: Text input → Text output
- * - hazo_llm_image_text: Image input → Text output  
+ * - hazo_llm_image_text: Image input → Text output
  * - hazo_llm_text_image: Text input → Image output
  * - hazo_llm_image_image: Image input → Image output
  * - hazo_llm_text_image_text: Text → Image → Text (chained)
+ * - hazo_llm_prompt_chain: Chain multiple prompts with dynamic value resolution
  */
 
 // =============================================================================
@@ -25,6 +26,7 @@ export {
   hazo_llm_image_image,
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
+  hazo_llm_prompt_chain,
   // Streaming functions
   hazo_llm_text_text_stream,
   hazo_llm_image_text_stream,
@@ -60,6 +62,7 @@ export {
 // =============================================================================
 export {
   get_prompt_by_area_and_key,
+  get_prompt_by_area_key_and_locals,
   get_prompt_text,
   get_prompts_by_area,
   get_prompt_by_uuid,
@@ -67,6 +70,7 @@ export {
   substitute_variables,
   parse_prompt_variables,
   validate_variables,
+  type LocalFilterOptions,
 } from './lib/prompts/index.js';
 
 // =============================================================================
@@ -122,5 +126,13 @@ export type {
   // Streaming types
   LLMStreamChunk,
   LLMStreamResponse,
+  // Prompt Chain types
+  ChainMatchType,
+  ChainFieldDefinition,
+  ChainVariableDefinition,
+  ChainCallDefinition,
+  ChainCallResult,
+  PromptChainParams,
+  PromptChainResponse,
 } from './lib/llm_api/types.js';
 

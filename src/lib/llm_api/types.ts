@@ -272,25 +272,43 @@ export interface CallLLMParams {
 export interface PromptRecord {
   /** Unique identifier for the prompt */
   uuid: string;
-  
+
   /** Area/category of the prompt */
   prompt_area: string;
-  
+
   /** Key identifier for the prompt */
   prompt_key: string;
-  
+
+  /**
+   * Local filter 1 - additional filter for more specific prompt lookup
+   * Example: company name, region, or other contextual identifier
+   */
+  local_1: string | null;
+
+  /**
+   * Local filter 2 - additional filter for more specific prompt lookup
+   * Example: department, product line, or other contextual identifier
+   */
+  local_2: string | null;
+
+  /**
+   * Local filter 3 - additional filter for more specific prompt lookup
+   * Example: sub-category, version, or other contextual identifier
+   */
+  local_3: string | null;
+
   /** The actual prompt text */
   prompt_text: string;
-  
+
   /** JSON string of variables used in the prompt */
   prompt_variables: string;
-  
+
   /** Additional notes about the prompt */
   prompt_notes: string;
-  
+
   /** Timestamp when the record was created */
   created_at: string;
-  
+
   /** Timestamp when the record was last changed */
   changed_by: string;
 }
@@ -679,5 +697,166 @@ export interface LLMApiClient {
 
   /** Images → Image → Text (chain image transformations then describe) */
   hazo_llm_image_image_text: (params: ImageImageTextParams, llm?: ProviderName) => Promise<LLMResponse>;
+
+  /** Execute a chain of prompts with dynamic value resolution */
+  hazo_llm_prompt_chain: (params: PromptChainParams, llm?: ProviderName) => Promise<PromptChainResponse>;
+}
+
+// =============================================================================
+// Prompt Chain Types
+// =============================================================================
+
+/**
+ * Match type for prompt chain field resolution
+ * - "direct": Use the value as-is
+ * - "call_chain": Parse value from a previous call result (e.g., "call[0].tax_category")
+ */
+export type ChainMatchType = 'direct' | 'call_chain';
+
+/**
+ * A field definition in a chain call for prompt_area and prompt_key
+ * Can be either a direct value or a reference to a previous call result
+ */
+export interface ChainFieldDefinition {
+  /** How to resolve the field value */
+  match_type: ChainMatchType;
+
+  /** The value (direct) or path expression (call_chain) */
+  value: string;
+}
+
+/**
+ * A variable definition for substitution in the prompt
+ * Specifies how to resolve a value and which variable name to substitute
+ */
+export interface ChainVariableDefinition {
+  /** How to resolve the variable value */
+  match_type: ChainMatchType;
+
+  /** The value (direct) or path expression (call_chain, e.g., "call[0].result.country") */
+  value: string;
+
+  /** The variable name to substitute in the prompt (uses $variable_name syntax) */
+  variable_name: string;
+}
+
+/**
+ * Image definition for multi-image chain calls
+ * Used when image_image call type needs multiple input images
+ */
+export interface ChainImageDefinition {
+  /** Base64 image data (direct or call_chain reference) */
+  image_b64: ChainFieldDefinition;
+
+  /** MIME type (direct or call_chain reference) */
+  image_mime_type: ChainFieldDefinition;
+}
+
+/**
+ * A single call definition in a prompt chain
+ * Supports all 4 service types: text_text, image_text, text_image, image_image
+ */
+export interface ChainCallDefinition {
+  /**
+   * Service type to invoke
+   * - 'text_text': Text input → Text output (default)
+   * - 'image_text': Image + Text input → Text output
+   * - 'text_image': Text input → Image output
+   * - 'image_image': Image + Text input → Image output
+   */
+  call_type?: ServiceType;
+
+  /** Prompt area for database lookup (required) */
+  prompt_area: ChainFieldDefinition;
+
+  /** Prompt key for database lookup (required) */
+  prompt_key: ChainFieldDefinition;
+
+  /** Optional array of variables to substitute in the prompt */
+  variables?: ChainVariableDefinition[];
+
+  /**
+   * Single image base64 data (for image_text, image_image single mode)
+   * Can reference previous call output via call_chain: "call[0].image_b64"
+   */
+  image_b64?: ChainFieldDefinition;
+
+  /**
+   * MIME type for single image (for image_text, image_image single mode)
+   * Can reference previous call output via call_chain: "call[0].image_mime_type"
+   */
+  image_mime_type?: ChainFieldDefinition;
+
+  /**
+   * Multiple images (for image_image multi mode)
+   * Each image can reference previous call outputs
+   */
+  images?: ChainImageDefinition[];
+}
+
+/**
+ * Result of a single call in the chain
+ */
+export interface ChainCallResult {
+  /** Call index (0-based) */
+  call_index: number;
+
+  /** Whether this call succeeded */
+  success: boolean;
+
+  /** Raw text response from LLM (for text_text, image_text) */
+  raw_text?: string;
+
+  /** Parsed JSON result (if LLM returned valid JSON) */
+  parsed_result?: Record<string, unknown>;
+
+  /** Generated image base64 data (for text_image, image_image) */
+  image_b64?: string;
+
+  /** MIME type of generated image (for text_image, image_image) */
+  image_mime_type?: string;
+
+  /** Error message if call failed */
+  error?: string;
+
+  /** The prompt_area used for this call */
+  prompt_area: string;
+
+  /** The prompt_key used for this call */
+  prompt_key: string;
+}
+
+/**
+ * Parameters for hazo_llm_prompt_chain function
+ */
+export interface PromptChainParams {
+  /** Array of chain call definitions */
+  chain_calls: ChainCallDefinition[];
+
+  /** Whether to continue on error (skip failed calls) - defaults to true */
+  continue_on_error?: boolean;
+}
+
+/**
+ * Response from hazo_llm_prompt_chain function
+ */
+export interface PromptChainResponse {
+  /** Overall success (true if at least one call succeeded) */
+  success: boolean;
+
+  /** Deep-merged result object from all successful calls */
+  merged_result: Record<string, unknown>;
+
+  /** Individual results for each call */
+  call_results: ChainCallResult[];
+
+  /** Array of errors encountered */
+  errors: Array<{ call_index: number; error: string }>;
+
+  /** Total number of calls attempted */
+  total_calls: number;
+
+  /** Number of successful calls */
+  successful_calls: number;
 }
 

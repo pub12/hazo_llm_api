@@ -1,8 +1,8 @@
 /**
  * Variable Substitution Module
- * 
+ *
  * Functions to replace variables in prompt text.
- * Variables are prefixed with $ (e.g., $location, $name).
+ * Variables use double curly brace syntax: {{variable_name}}
  * Values come from the prompt_variables JSON array.
  */
 
@@ -14,8 +14,8 @@ import type { Logger, PromptVariables } from '../llm_api/types.js';
 
 /**
  * Substitute variables in prompt text with values from prompt_variables
- * Variables are identified by $ prefix (e.g., $location becomes "Tokyo")
- * 
+ * Variables are identified by double curly braces (e.g., {{location}} becomes "Tokyo")
+ *
  * @param prompt_text - The prompt text containing variables to replace
  * @param prompt_variables - Array of key-value objects with variable values
  *                           Format: [{ "variable1": "value1", "variable2": "value2" }]
@@ -28,16 +28,16 @@ export function substitute_variables(
   logger: Logger
 ): string {
   const file_name = 'substitute_variables.ts';
-  
+
   // If no variables provided, return original text
   if (!prompt_variables || prompt_variables.length === 0) {
     return prompt_text;
   }
-  
+
   let result_text = prompt_text;
   const substitutions_made: Record<string, string> = {};
   const missing_variables: string[] = [];
-  
+
   // Flatten all variables from the array into a single object
   const all_variables: Record<string, string> = {};
   for (const var_obj of prompt_variables) {
@@ -45,42 +45,40 @@ export function substitute_variables(
       all_variables[key] = value;
     }
   }
-  
-  // Find all $variable patterns in the text
-  const variable_pattern = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+
+  // Find all {{variable}} patterns in the text
+  const variable_pattern = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
   const found_variables: string[] = [];
   let match;
-  
+
   while ((match = variable_pattern.exec(prompt_text)) !== null) {
     const var_name = match[1];
     if (!found_variables.includes(var_name)) {
       found_variables.push(var_name);
     }
   }
-  
+
   // Substitute each found variable
   for (const var_name of found_variables) {
-    const var_pattern = new RegExp(`\\$${var_name}\\b`, 'g');
-    
+    const var_pattern = new RegExp(`\\{\\{${var_name}\\}\\}`, 'g');
+
     if (var_name in all_variables) {
       const value = all_variables[var_name];
       result_text = result_text.replace(var_pattern, value);
-      substitutions_made[`$${var_name}`] = value;
+      substitutions_made[`{{${var_name}}}`] = value;
     } else {
       missing_variables.push(var_name);
-      logger.warn(`Variable not found in prompt_variables: $${var_name}`, {
+      logger.warn(`Variable not found in prompt_variables: {{${var_name}}}`, {
         file: file_name,
-        line: 75,
         data: { variable: var_name, available_variables: Object.keys(all_variables) },
       });
     }
   }
-  
+
   // Log variable substitution with before and after in one message
   if (Object.keys(substitutions_made).length > 0) {
-    logger.debug('Variable substitution', {
+    logger.info('Variable substitution', {
       file: file_name,
-      line: 83,
       data: {
         before: prompt_text,
         after: result_text,
@@ -88,7 +86,7 @@ export function substitute_variables(
       },
     });
   }
-  
+
   return result_text;
 }
 
@@ -155,28 +153,27 @@ export function validate_variables(
   logger: Logger
 ): { valid: boolean; missing_variables: string[] } {
   const file_name = 'substitute_variables.ts';
-  
-  // Find all variables in the prompt text
-  const variable_pattern = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+
+  // Find all {{variable}} patterns in the prompt text
+  const variable_pattern = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
   const found_variables: string[] = [];
   let match;
-  
+
   while ((match = variable_pattern.exec(prompt_text)) !== null) {
     const var_name = match[1];
     if (!found_variables.includes(var_name)) {
       found_variables.push(var_name);
     }
   }
-  
+
   // If no variables in text, validation passes
   if (found_variables.length === 0) {
     logger.debug('No variables found in prompt text', {
       file: file_name,
-      line: 180,
     });
     return { valid: true, missing_variables: [] };
   }
-  
+
   // Flatten provided variables
   const all_variables: Record<string, string> = {};
   if (prompt_variables) {
@@ -186,7 +183,7 @@ export function validate_variables(
       }
     }
   }
-  
+
   // Check for missing variables
   const missing_variables: string[] = [];
   for (const var_name of found_variables) {
@@ -194,19 +191,18 @@ export function validate_variables(
       missing_variables.push(var_name);
     }
   }
-  
+
   const valid = missing_variables.length === 0;
-  
+
   logger.debug('Variable validation completed', {
     file: file_name,
-    line: 206,
     data: {
       valid,
       found_variables,
       missing_variables,
     },
   });
-  
+
   return { valid, missing_variables };
 }
 

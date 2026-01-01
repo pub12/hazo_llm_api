@@ -81,12 +81,8 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        llm_model: 'gemini',
         logger: test_logger,
         sqlite_path: app_config.sqlite_path,
-        api_url: app_config.api_url,
-        api_url_image: app_config.api_url_image,
-        api_key: api_key,
       });
     } catch (error) {
       test_logger.error('Failed to initialize LLM API', {
@@ -175,11 +171,14 @@ export async function PUT(
     }
     
     const body = await request.json();
-    const { prompt_area, prompt_key, prompt_text, prompt_variables, prompt_notes } = body;
-    
-    const updates: Record<string, string> = {};
+    const { prompt_area, prompt_key, local_1, local_2, local_3, prompt_text, prompt_variables, prompt_notes } = body;
+
+    const updates: Record<string, string | null> = {};
     if (prompt_area !== undefined) updates.prompt_area = prompt_area;
     if (prompt_key !== undefined) updates.prompt_key = prompt_key;
+    if (local_1 !== undefined) updates.local_1 = local_1 || null;
+    if (local_2 !== undefined) updates.local_2 = local_2 || null;
+    if (local_3 !== undefined) updates.local_3 = local_3 || null;
     if (prompt_text !== undefined) updates.prompt_text = prompt_text;
     if (prompt_variables !== undefined) updates.prompt_variables = prompt_variables;
     if (prompt_notes !== undefined) updates.prompt_notes = prompt_notes;

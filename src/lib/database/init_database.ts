@@ -247,12 +247,15 @@ export function initialize_database_sync(
  */
 function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
   const file_name = 'init_database.ts';
-  
+
   const create_table_sql = `
     CREATE TABLE IF NOT EXISTS prompts_library (
       uuid TEXT PRIMARY KEY,
       prompt_area TEXT NOT NULL,
       prompt_key TEXT NOT NULL,
+      local_1 TEXT DEFAULT NULL,
+      local_2 TEXT DEFAULT NULL,
+      local_3 TEXT DEFAULT NULL,
       prompt_text TEXT NOT NULL,
       prompt_variables TEXT DEFAULT '[]',
       prompt_notes TEXT DEFAULT '',
@@ -260,17 +263,20 @@ function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
       changed_by TEXT DEFAULT NULL
     )
   `;
-  
+
   try {
     db.run(create_table_sql);
-    
-    // Create index for faster lookups by prompt_area and prompt_key
+
+    // Migrate existing tables: add local_1, local_2, local_3 columns if they don't exist
+    migrate_add_local_columns(db, logger);
+
+    // Create index for faster lookups by prompt_area, prompt_key, and local filters
     const create_index_sql = `
-      CREATE INDEX IF NOT EXISTS idx_prompts_area_key 
-      ON prompts_library(prompt_area, prompt_key)
+      CREATE INDEX IF NOT EXISTS idx_prompts_area_key
+      ON prompts_library(prompt_area, prompt_key, local_1, local_2, local_3)
     `;
     db.run(create_index_sql);
-    
+
     logger.debug('prompts_library table created/verified', {
       file: file_name,
       line: 164,
@@ -283,6 +289,55 @@ function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
       data: { error: error_message },
     });
     throw error;
+  }
+}
+
+/**
+ * Migrate existing database: add local_1, local_2, local_3 columns if they don't exist
+ * @param db - Database instance
+ * @param logger - Logger instance
+ */
+function migrate_add_local_columns(db: SqlJsDatabase, logger: Logger): void {
+  const file_name = 'init_database.ts';
+
+  try {
+    // Check if local_1 column exists
+    const table_info = db.exec("PRAGMA table_info(prompts_library)");
+    if (table_info.length === 0) {
+      return; // Table doesn't exist yet
+    }
+
+    const columns = table_info[0].values.map(row => row[1] as string);
+
+    // Add local_1 if it doesn't exist
+    if (!columns.includes('local_1')) {
+      db.run('ALTER TABLE prompts_library ADD COLUMN local_1 TEXT DEFAULT NULL');
+      logger.info('Migration: Added local_1 column to prompts_library', {
+        file: file_name,
+      });
+    }
+
+    // Add local_2 if it doesn't exist
+    if (!columns.includes('local_2')) {
+      db.run('ALTER TABLE prompts_library ADD COLUMN local_2 TEXT DEFAULT NULL');
+      logger.info('Migration: Added local_2 column to prompts_library', {
+        file: file_name,
+      });
+    }
+
+    // Add local_3 if it doesn't exist
+    if (!columns.includes('local_3')) {
+      db.run('ALTER TABLE prompts_library ADD COLUMN local_3 TEXT DEFAULT NULL');
+      logger.info('Migration: Added local_3 column to prompts_library', {
+        file: file_name,
+      });
+    }
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    logger.warn('Migration warning (may be harmless)', {
+      file: file_name,
+      data: { error: error_message },
+    });
   }
 }
 
@@ -389,12 +444,12 @@ export function insert_prompt(
 ): PromptRecord {
   const file_name = 'init_database.ts';
   const uuid = randomUUID();
-  
+
   const insert_sql = `
-    INSERT INTO prompts_library (uuid, prompt_area, prompt_key, prompt_text, prompt_variables, prompt_notes)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO prompts_library (uuid, prompt_area, prompt_key, local_1, local_2, local_3, prompt_text, prompt_variables, prompt_notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
-  
+
   try {
     logger.debug('Inserting prompt into database', {
       file: file_name,
@@ -403,13 +458,19 @@ export function insert_prompt(
         uuid,
         prompt_area: prompt.prompt_area,
         prompt_key: prompt.prompt_key,
+        local_1: prompt.local_1,
+        local_2: prompt.local_2,
+        local_3: prompt.local_3,
       },
     });
-    
+
     db.run(insert_sql, [
       uuid,
       prompt.prompt_area,
       prompt.prompt_key,
+      prompt.local_1 || null,
+      prompt.local_2 || null,
+      prompt.local_3 || null,
       prompt.prompt_text,
       prompt.prompt_variables,
       prompt.prompt_notes,
@@ -470,7 +531,7 @@ export function update_prompt(
   // Build dynamic update SQL
   const fields: string[] = [];
   const values: (string | null)[] = [];
-  
+
   if (updates.prompt_area !== undefined) {
     fields.push('prompt_area = ?');
     values.push(updates.prompt_area);
@@ -478,6 +539,18 @@ export function update_prompt(
   if (updates.prompt_key !== undefined) {
     fields.push('prompt_key = ?');
     values.push(updates.prompt_key);
+  }
+  if (updates.local_1 !== undefined) {
+    fields.push('local_1 = ?');
+    values.push(updates.local_1 || null);
+  }
+  if (updates.local_2 !== undefined) {
+    fields.push('local_2 = ?');
+    values.push(updates.local_2 || null);
+  }
+  if (updates.local_3 !== undefined) {
+    fields.push('local_3 = ?');
+    values.push(updates.local_3 || null);
   }
   if (updates.prompt_text !== undefined) {
     fields.push('prompt_text = ?');

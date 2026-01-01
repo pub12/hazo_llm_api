@@ -75,12 +75,8 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        llm_model: 'gemini',
         logger: test_logger,
         sqlite_path: app_config.sqlite_path,
-        api_url: app_config.api_url,
-        api_url_image: app_config.api_url_image,
-        api_key: api_key,
       });
     } catch (error) {
       test_logger.error('Failed to initialize LLM API', {
@@ -151,26 +147,29 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
-    const { prompt_area, prompt_key, prompt_text, prompt_variables, prompt_notes } = body;
-    
+    const { prompt_area, prompt_key, local_1, local_2, local_3, prompt_text, prompt_variables, prompt_notes } = body;
+
     if (!prompt_area || !prompt_key || !prompt_text) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: prompt_area, prompt_key, prompt_text' },
         { status: 400 }
       );
     }
-    
+
     const new_prompt: PromptRecord = {
       uuid: crypto.randomUUID(),
       prompt_area,
       prompt_key,
+      local_1: local_1 || null,
+      local_2: local_2 || null,
+      local_3: local_3 || null,
       prompt_text,
       prompt_variables: prompt_variables || '[]',
       prompt_notes: prompt_notes || '',
       created_at: new Date().toISOString(),
       changed_by: 'api_user',
     };
-    
+
     insert_prompt(db, new_prompt, test_logger);
     
     return NextResponse.json({ success: true, data: new_prompt });

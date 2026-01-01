@@ -36,6 +36,9 @@ interface PromptVariable {
 interface FormData {
   prompt_area: string;
   prompt_key: string;
+  local_1: string;
+  local_2: string;
+  local_3: string;
   prompt_text: string;
   prompt_variables: PromptVariable[];
   prompt_notes: string;
@@ -44,6 +47,9 @@ interface FormData {
 const empty_form_data: FormData = {
   prompt_area: '',
   prompt_key: '',
+  local_1: '',
+  local_2: '',
+  local_3: '',
   prompt_text: '',
   prompt_variables: [],
   prompt_notes: '',
@@ -164,6 +170,9 @@ export default function PromptConfigPage() {
     set_form_data({
       prompt_area: prompt.prompt_area,
       prompt_key: prompt.prompt_key,
+      local_1: prompt.local_1 || '',
+      local_2: prompt.local_2 || '',
+      local_3: prompt.local_3 || '',
       prompt_text: prompt.prompt_text,
       prompt_variables: variables,
       prompt_notes: prompt.prompt_notes,
@@ -184,7 +193,7 @@ export default function PromptConfigPage() {
   // ==========================================================================
 
   const handle_field_change = (field: keyof FormData, value: string) => {
-    if (field === 'prompt_area' || field === 'prompt_key') {
+    if (field === 'prompt_area' || field === 'prompt_key' || field === 'local_1' || field === 'local_2' || field === 'local_3') {
       set_form_data(prev => ({ ...prev, [field]: sanitize_identifier(value) }));
     } else {
       set_form_data(prev => ({ ...prev, [field]: value }));
@@ -230,6 +239,9 @@ export default function PromptConfigPage() {
       const payload = {
         prompt_area: form_data.prompt_area,
         prompt_key: form_data.prompt_key,
+        local_1: form_data.local_1 || null,
+        local_2: form_data.local_2 || null,
+        local_3: form_data.local_3 || null,
         prompt_text: form_data.prompt_text,
         prompt_variables: JSON.stringify(form_data.prompt_variables.filter(v => v.name.trim())),
         prompt_notes: form_data.prompt_notes,
@@ -334,6 +346,7 @@ export default function PromptConfigPage() {
                 <tr>
                   <th className="cls_th_area text-left p-3 font-medium text-sm min-w-[100px]">Area</th>
                   <th className="cls_th_key text-left p-3 font-medium text-sm min-w-[120px]">Key</th>
+                  <th className="cls_th_locals text-left p-3 font-medium text-sm min-w-[150px]">Local Filters</th>
                   <th className="cls_th_text text-left p-3 font-medium text-sm min-w-[200px]">Prompt Text</th>
                   <th className="cls_th_variables text-left p-3 font-medium text-sm min-w-[150px]">Variables</th>
                   <th className="cls_th_actions text-center p-3 font-medium text-sm w-[100px]">Actions</th>
@@ -349,10 +362,21 @@ export default function PromptConfigPage() {
                     variables = [];
                   }
 
+                  const locals = [prompt.local_1, prompt.local_2, prompt.local_3].filter(Boolean);
+
                   return (
                     <tr key={prompt.uuid} className="cls_table_row border-b hover:bg-muted/30">
                       <td className="cls_td_area p-3 text-sm break-words">{prompt.prompt_area}</td>
                       <td className="cls_td_key p-3 text-sm break-words">{prompt.prompt_key}</td>
+                      <td className="cls_td_locals p-3 text-sm break-words">
+                        {locals.length > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {locals.join(' → ')}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Base</span>
+                        )}
+                      </td>
                       <td className="cls_td_text p-3 text-sm break-words max-w-[300px]">
                         <span className="line-clamp-2">{prompt.prompt_text}</span>
                       </td>
@@ -436,6 +460,40 @@ export default function PromptConfigPage() {
                 <p className="text-xs text-muted-foreground">Lowercase, single word only</p>
               </div>
 
+              {/* Local Filters */}
+              <div className="cls_field_locals space-y-2">
+                <label className="text-sm font-medium">Local Filters (Optional)</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Localization filters for more specific prompt variants. Leave empty for base prompt.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Input
+                      className="cls_local_1_input"
+                      placeholder="local_1"
+                      value={form_data.local_1}
+                      onChange={(e) => handle_field_change('local_1', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      className="cls_local_2_input"
+                      placeholder="local_2"
+                      value={form_data.local_2}
+                      onChange={(e) => handle_field_change('local_2', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      className="cls_local_3_input"
+                      placeholder="local_3"
+                      value={form_data.local_3}
+                      onChange={(e) => handle_field_change('local_3', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Prompt Text */}
               <div className="cls_field_text space-y-2">
                 <label className="text-sm font-medium">
@@ -443,7 +501,7 @@ export default function PromptConfigPage() {
                 </label>
                 <Textarea
                   className="cls_prompt_text_input min-h-[100px]"
-                  placeholder="Enter your prompt text. Use {{variable_name}} for variables."
+                  placeholder="Enter your prompt text. Use {{variable_name}} for variables, e.g., Give me info about {{country}}"
                   value={form_data.prompt_text}
                   onChange={(e) => handle_field_change('prompt_text', e.target.value)}
                   rows={4}

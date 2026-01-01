@@ -15,11 +15,12 @@ import {
   hazo_llm_image_image,
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
+  hazo_llm_prompt_chain,
   insert_prompt,
   get_database,
   is_initialized,
 } from 'hazo_llm_api/server';
-import type { Logger, TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, TextImageTextParams, ImageImageTextParams, ChainImage } from 'hazo_llm_api';
+import type { Logger, TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, TextImageTextParams, ImageImageTextParams, ChainImage, PromptChainParams } from 'hazo_llm_api/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
@@ -96,12 +97,8 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        llm_model: 'gemini',
         logger: test_logger,
         sqlite_path: app_config.sqlite_path,
-        api_url: app_config.api_url,
-        api_url_image: app_config.api_url_image,
-        api_key: api_key,
       });
     } catch (error) {
       test_logger.error('Failed to initialize LLM API', {
@@ -202,7 +199,11 @@ export async function POST(request: NextRequest) {
       case 'transform_image':
         result = await test_transform_image(body, llm);
         break;
-        
+
+      case 'prompt_chain':
+        result = await test_prompt_chain(body, llm);
+        break;
+
       default:
         result = {
           test_name: 'unknown',
@@ -434,14 +435,20 @@ async function insert_test_prompt_data(body: Record<string, unknown>): Promise<T
   
   const prompt_area = (body.prompt_area as string) || 'test';
   const prompt_key = (body.prompt_key as string) || 'greeting';
+  const local_1 = (body.local_1 as string) || null;
+  const local_2 = (body.local_2 as string) || null;
+  const local_3 = (body.local_3 as string) || null;
   const prompt_text = (body.prompt_text as string) || 'Say hello in a friendly way.';
   const prompt_variables = (body.prompt_variables as string) || '[]';
   const prompt_notes = (body.prompt_notes as string) || 'Test prompt for LLM API testing';
-  
+
   try {
     const inserted = insert_prompt(db, {
       prompt_area,
       prompt_key,
+      local_1,
+      local_2,
+      local_3,
       prompt_text,
       prompt_variables,
       prompt_notes,
@@ -862,6 +869,77 @@ async function test_transform_image(body: Record<string, unknown>, llm?: string)
   };
 }
 
+/**
+ * Test 11: Prompt Chain
+ * Execute a chain of prompts with dynamic value resolution from previous results
+ */
+async function test_prompt_chain(body: Record<string, unknown>, llm?: string): Promise<TestResult> {
+  const chain_calls = body.chain_calls as PromptChainParams['chain_calls'];
+  const continue_on_error = (body.continue_on_error as boolean) ?? true;
+
+  if (!chain_calls || !Array.isArray(chain_calls) || chain_calls.length === 0) {
+    return {
+      test_name: 'Prompt Chain',
+      success: false,
+      message: 'chain_calls array is required',
+      error: 'Please provide a valid chain_calls array with at least one call definition',
+    };
+  }
+
+  // Validate each call definition has required fields
+  for (let i = 0; i < chain_calls.length; i++) {
+    const call = chain_calls[i];
+    if (!call.prompt_area || !call.prompt_key) {
+      return {
+        test_name: 'Prompt Chain',
+        success: false,
+        message: `Call ${i}: prompt_area and prompt_key are required`,
+        error: 'Each call must have prompt_area and prompt_key fields',
+      };
+    }
+    if (!call.prompt_area.match_type || !call.prompt_area.value) {
+      return {
+        test_name: 'Prompt Chain',
+        success: false,
+        message: `Call ${i}: prompt_area must have match_type and value`,
+        error: 'Invalid prompt_area structure',
+      };
+    }
+    if (!call.prompt_key.match_type || !call.prompt_key.value) {
+      return {
+        test_name: 'Prompt Chain',
+        success: false,
+        message: `Call ${i}: prompt_key must have match_type and value`,
+        error: 'Invalid prompt_key structure',
+      };
+    }
+  }
+
+  const params: PromptChainParams = {
+    chain_calls,
+    continue_on_error,
+  };
+
+  const response = await hazo_llm_prompt_chain(params, llm);
+
+  return {
+    test_name: 'Prompt Chain',
+    success: response.success,
+    message: response.success
+      ? `Chain completed: ${response.successful_calls}/${response.total_calls} calls succeeded`
+      : `Chain failed: ${response.errors.length} errors`,
+    data: {
+      merged_result: response.merged_result,
+      call_results: response.call_results,
+      total_calls: response.total_calls,
+      successful_calls: response.successful_calls,
+    },
+    error: response.errors.length > 0
+      ? response.errors.map(e => `Call ${e.call_index}: ${e.error}`).join('; ')
+      : undefined,
+  };
+}
+
 // =============================================================================
 // GET Handler - Get Test Status
 // =============================================================================
@@ -883,6 +961,7 @@ export async function GET() {
       'text_image_text',
       'image_image_text',
       'transform_image',
+      'prompt_chain',
     ],
   });
 }

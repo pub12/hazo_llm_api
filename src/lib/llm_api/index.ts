@@ -25,6 +25,8 @@ import type {
   ImageImageParams,
   TextImageTextParams,
   ImageImageTextParams,
+  PromptChainParams,
+  PromptChainResponse,
   Logger,
   GeminiGenerationConfig,
 } from './types.js';
@@ -36,6 +38,7 @@ import { hazo_llm_text_image as hazo_llm_text_image_internal } from './hazo_llm_
 import { hazo_llm_image_image as hazo_llm_image_image_internal } from './hazo_llm_image_image.js';
 import { hazo_llm_text_image_text as hazo_llm_text_image_text_internal } from './hazo_llm_text_image_text.js';
 import { hazo_llm_image_image_text as hazo_llm_image_image_text_internal } from './hazo_llm_image_image_text.js';
+import { hazo_llm_prompt_chain as hazo_llm_prompt_chain_internal } from './hazo_llm_prompt_chain.js';
 import { get_gemini_api_url } from '../providers/gemini/gemini_client.js';
 import {
   register_provider,
@@ -980,8 +983,11 @@ export async function initialize_llm_api(config: LLMApiConfig = {}): Promise<LLM
     hazo_llm_image_image_text: async (params: ImageImageTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_image_image_text(params, llm);
     },
+    hazo_llm_prompt_chain: async (params: PromptChainParams, llm?: ProviderName): Promise<PromptChainResponse> => {
+      return hazo_llm_prompt_chain(params, llm);
+    },
   };
-  
+
   return client;
 }
 
@@ -1138,6 +1144,54 @@ export async function hazo_llm_image_image_text(params: ImageImageTextParams, ll
     return hazo_llm_image_image_text_internal(params, db, config, llm);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Execute a chain of prompts with dynamic value resolution
+ * Each call can reference values from previous call results
+ *
+ * @param params - Chain parameters including call definitions
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
+ * @returns Chain response with merged results and individual call outcomes
+ *
+ * @example
+ * ```typescript
+ * import { hazo_llm_prompt_chain } from 'hazo_llm_api/server';
+ *
+ * const response = await hazo_llm_prompt_chain({
+ *   chain_calls: [
+ *     {
+ *       prompt_area: { match_type: 'direct', value: 'document' },
+ *       prompt_key: { match_type: 'direct', value: 'initial_read' }
+ *     },
+ *     {
+ *       prompt_area: { match_type: 'direct', value: 'document' },
+ *       prompt_key: { match_type: 'direct', value: 'process_results' },
+ *       local_1: {
+ *         match_type: 'call_chain',
+ *         value: 'call[0].tax_category',
+ *         variable_name: 'previous_category'
+ *       }
+ *     }
+ *   ]
+ * });
+ * ```
+ */
+export async function hazo_llm_prompt_chain(params: PromptChainParams, llm?: ProviderName): Promise<PromptChainResponse> {
+  try {
+    const config = check_initialized();
+    const db = get_database();
+    return hazo_llm_prompt_chain_internal(params, db, config, llm);
+  } catch (error) {
+    return {
+      success: false,
+      merged_result: {},
+      call_results: [],
+      errors: [{ call_index: -1, error: error instanceof Error ? error.message : String(error) }],
+      total_calls: params.chain_calls.length,
+      successful_calls: 0,
+    };
   }
 }
 
@@ -1340,4 +1394,11 @@ export type {
   CallLLMParams,
   GeminiGenerationConfig,
   GeminiApiGenerationConfig,
+  // Prompt Chain Types
+  ChainMatchType,
+  ChainFieldDefinition,
+  ChainCallDefinition,
+  ChainCallResult,
+  PromptChainParams,
+  PromptChainResponse,
 } from './types.js';
