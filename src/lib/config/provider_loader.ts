@@ -180,7 +180,7 @@ export function load_provider_from_config(
     });
     return {
       success: false,
-      error: 'Config file hazo_llm_api_config.ini not found',
+      error: 'Config file config/hazo_llm_api_config.ini not found',
     };
   }
 

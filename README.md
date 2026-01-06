@@ -34,7 +34,7 @@ npm install hazo_llm_api
 
 ### 1. Set Up Configuration
 
-Create `hazo_llm_api_config.ini` in your project root:
+Create `config/hazo_llm_api_config.ini` in your project:
 
 ```ini
 [llm]
@@ -75,7 +75,7 @@ const logger = {
   debug: console.debug,
 };
 
-// Initialize - reads config from hazo_llm_api_config.ini
+// Initialize - reads config from config/hazo_llm_api_config.ini
 await initialize_llm_api({ logger });
 ```
 
@@ -198,7 +198,7 @@ if (response.success) {
 
 Initialize the LLM API. Must be called before using any other functions.
 
-Configuration is read from `hazo_llm_api_config.ini` file, which should be in your project root.
+Configuration is read from `config/hazo_llm_api_config.ini` file.
 
 #### LLMApiConfig
 
@@ -369,7 +369,7 @@ const response3 = await hazo_llm_text_text(
 
 ### Provider Configuration
 
-Each provider has its own section in `hazo_llm_api_config.ini`:
+Each provider has its own section in `config/hazo_llm_api_config.ini`:
 
 ```ini
 [llm_gemini]

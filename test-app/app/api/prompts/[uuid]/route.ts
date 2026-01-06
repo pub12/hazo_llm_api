@@ -33,7 +33,7 @@ interface AppConfig {
  * Read configuration from hazo_llm_api_config.ini file
  */
 function get_app_config(): AppConfig {
-  const config_path = path.resolve(process.cwd(), '..', 'hazo_llm_api_config.ini');
+  const config_path = path.resolve(process.cwd(), '..', 'config', 'hazo_llm_api_config.ini');
   
   try {
     const config_content = fs.readFileSync(config_path, 'utf-8');

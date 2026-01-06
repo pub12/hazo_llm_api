@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for prompt notes and version tracking
 
 - **Configuration System**: INI-based configuration with environment variable support
-  - `hazo_llm_api_config.ini` for package settings
+  - `config/hazo_llm_api_config.ini` for package settings
   - `.env.local` for API keys (not committed to git)
   - Per-provider configuration sections (`[llm_gemini]`, `[llm_qwen]`)
   - Generation parameter configuration with prefixes (text_, image_)

@@ -31,7 +31,7 @@ export interface Logger {
  * All parameters are optional - only include in API calls if explicitly set
  *
  * Note: This is used internally by the Gemini provider.
- * Configure via hazo_llm_api_config.ini [llm_gemini] section instead of passing directly.
+ * Configure via config/hazo_llm_api_config.ini [llm_gemini] section instead of passing directly.
  */
 export interface GeminiGenerationConfig {
   /** Controls randomness in output (0.0-2.0). Lower = more deterministic */

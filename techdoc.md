@@ -180,7 +180,7 @@ TailwindCSS with Shadcn/UI theming:
 
 ### Configuration File
 
-**File**: `hazo_llm_api_config.ini`
+**File**: `config/hazo_llm_api_config.ini`
 
 **Format**: INI format with sections
 
@@ -375,7 +375,7 @@ import { Layout } from 'hazo_llm_api';
 
 ## Logging
 
-Logging configuration is stored in `hazo_llm_api_config.ini`:
+Logging configuration is stored in `config/hazo_llm_api_config.ini`:
 
 ```ini
 [logging]

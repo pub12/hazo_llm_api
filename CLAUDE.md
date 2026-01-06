@@ -58,7 +58,7 @@ When modifying service functions or adding providers, use these helpers:
 
 ### Configuration
 
-- `hazo_llm_api_config.ini` - LLM provider settings, generation params, database path
+- `config/hazo_llm_api_config.ini` - LLM provider settings, generation params, database path
   - `[llm]` section: enabled_llms, primary_llm, sqlite_path
   - `[llm_gemini]` section: Gemini provider config
   - `[llm_qwen]` section: Qwen provider config
@@ -113,7 +113,7 @@ When modifying service functions or adding providers, use these helpers:
    ```
 
 5. **Add configuration**:
-   - Config file: `[llm_myprovider]` section in `hazo_llm_api_config.ini`
+   - Config file: `[llm_myprovider]` section in `config/hazo_llm_api_config.ini`
    - Environment: `MYPROVIDER_API_KEY` in `.env.local`
    - Enable: Add `"myprovider"` to `enabled_llms` in `[llm]` section
 
@@ -197,7 +197,7 @@ Service Function → Registry → Provider Instance → LLM API
    - Each provider handles its own API formatting and response parsing
 
 4. **Configuration Loader** (`lib/llm_api/index.ts`)
-   - Reads `hazo_llm_api_config.ini`
+   - Reads `config/hazo_llm_api_config.ini`
    - Loads API keys from environment variables
    - Instantiates and registers providers
    - Auto-runs on module import

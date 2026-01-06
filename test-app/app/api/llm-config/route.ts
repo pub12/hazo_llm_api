@@ -49,7 +49,7 @@ function get_llm_config(): {
   enabled_llms: string[];
   primary_llm: string;
 } {
-  const config_path = path.resolve(process.cwd(), '..', 'hazo_llm_api_config.ini');
+  const config_path = path.resolve(process.cwd(), '..', 'config', 'hazo_llm_api_config.ini');
   
   const default_enabled = ['gemini'];
   const default_primary = 'gemini';

@@ -198,7 +198,7 @@ export class QwenProvider implements LLMProvider {
       const config_key = config_key_map[service_type] || 'model';
       throw new Error(
         `Model not configured for service: ${service_type}. ` +
-        `Please set ${config_key} in the [llm_qwen] section of hazo_llm_api_config.ini. ` +
+        `Please set ${config_key} in the [llm_qwen] section of config/hazo_llm_api_config.ini. ` +
         `Example: ${config_key}=qwen-max`
       );
     }

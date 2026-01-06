@@ -36,7 +36,7 @@ yarn add react react-dom
 
 ### 3. Create Configuration File
 
-Create `hazo_llm_api_config.ini` in your project root:
+Create `config/hazo_llm_api_config.ini` in your project:
 
 ```ini
 [llm]
@@ -259,7 +259,7 @@ If you need PostgreSQL support, please open a feature request on GitHub.
 ## Troubleshooting Checklist
 
 - [ ] Config file is named exactly `hazo_llm_api_config.ini`
-- [ ] Config file is in project root (or parent directories)
+- [ ] Config file is in `config/` directory (or parent directories)
 - [ ] Environment variables are in `.env.local` (not `.env`)
 - [ ] API key environment variable matches provider name (e.g., `GEMINI_API_KEY`)
 - [ ] Provider is listed in `enabled_llms` array
@@ -306,7 +306,8 @@ If the provider is not built-in, see `techdoc.md` for the provider implementatio
 ```
 your-project/
 ├── .env.local                    # API keys (gitignored)
-├── hazo_llm_api_config.ini       # Package configuration
+├── config/
+│   └── hazo_llm_api_config.ini   # Package configuration
 ├── prompt_library.sqlite         # Auto-created prompt database
 ├── next.config.js                # Next.js config (if applicable)
 ├── package.json

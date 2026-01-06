@@ -89,17 +89,17 @@ export const QWEN_PARAM_MAPPINGS: ParameterMapping[] = [
 
 /**
  * Find the config file path
- * Searches in current directory and parent directories
+ * Searches in config/ subdirectory and parent directories
  *
  * @param filename - Config filename to search for (default: hazo_llm_api_config.ini)
  * @returns The path to the config file or null if not found
  */
 export function find_config_file(filename = 'hazo_llm_api_config.ini'): string | null {
-  // Search paths: current dir, parent dir, grandparent dir
+  // Search paths: config/ in current dir, parent dir, grandparent dir
   const search_paths = [
-    path.join(process.cwd(), filename),
-    path.join(process.cwd(), '..', filename),
-    path.join(process.cwd(), '..', '..', filename),
+    path.join(process.cwd(), 'config', filename),
+    path.join(process.cwd(), '..', 'config', filename),
+    path.join(process.cwd(), '..', '..', 'config', filename),
   ];
 
   for (const config_path of search_paths) {

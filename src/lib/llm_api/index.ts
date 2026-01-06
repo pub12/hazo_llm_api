@@ -150,17 +150,17 @@ export function set_hooks(hooks: import('./types.js').LLMHooks): void {
 
 /**
  * Find the config file path
- * Searches in current directory and parent directories
+ * Searches in config/ subdirectory and parent directories
  * @returns The path to the config file or null if not found
  */
 function find_config_file(): string | null {
   const config_filename = 'hazo_llm_api_config.ini';
-  
-  // Search paths: current dir, parent dir, grandparent dir
+
+  // Search paths: config/ in current dir, parent dir, grandparent dir
   const search_paths = [
-    path.join(process.cwd(), config_filename),
-    path.join(process.cwd(), '..', config_filename),
-    path.join(process.cwd(), '..', '..', config_filename),
+    path.join(process.cwd(), 'config', config_filename),
+    path.join(process.cwd(), '..', 'config', config_filename),
+    path.join(process.cwd(), '..', '..', 'config', config_filename),
   ];
   
   for (const config_path of search_paths) {

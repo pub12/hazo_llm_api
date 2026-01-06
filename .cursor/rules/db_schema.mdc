@@ -2,7 +2,7 @@
 
 ## SQLite Database: `prompt_library.sqlite`
 
-Database path is configured in `hazo_llm_api_config.ini` under `[llm].sqlite_path`.
+Database path is configured in `config/hazo_llm_api_config.ini` under `[llm].sqlite_path`.
 Auto-created on module import when `hazo_llm_api/server` is imported.
 
 ---

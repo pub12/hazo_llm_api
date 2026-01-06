@@ -151,7 +151,7 @@ export function build_provider_not_found_error(llm?: ProviderName): LLMResponse 
 
   const message = llm
     ? `LLM provider "${llm}" is enabled in config but not available. ${env_var_name ? `Check ${env_var_name} in environment variables.` : 'Provider may not be properly configured.'}`
-    : 'No LLM provider configured. Check enabled_llms and primary_llm in hazo_llm_api_config.ini';
+    : 'No LLM provider configured. Check enabled_llms and primary_llm in config/hazo_llm_api_config.ini';
 
   return build_error_response(
     LLM_ERROR_CODES.PROVIDER_NOT_FOUND,
