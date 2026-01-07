@@ -53,9 +53,20 @@
     "ini": "^6.0.0",
     "sql.js": "^1.10.0"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/ini": "^4.1.1",

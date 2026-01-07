@@ -1,0 +1,83 @@
+# Source files (only dist is distributed)
+src/
+
+# Test application (Next.js demo app - not for distribution)
+test-app/
+
+# Development configuration
+tsconfig.json
+tsconfig.build.json
+.cursor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Version control
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Testing
+coverage/
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env*.local
+.env.development
+.env.production
+
+# Temporary files
+*.tmp
+.cache/
+.DS_Store
+*.pem
+
+# Build artifacts (Next.js, etc)
+.next/
+out/
+build/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Database files (users should create their own)
+*.sqlite
+*.db
+
+# Documentation source (keep built docs)
+# Keep: README.md, techdoc.md (these are in package.json "files")
+setup_checklist.md
+CLAUDE.md
+CHANGE_LOG.md
+
+# Package manager
+.pnp
+.pnp.js
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Vercel
+.vercel
