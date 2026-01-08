@@ -11,10 +11,10 @@
 import { useState, useCallback } from 'react';
 import { Layout } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { ImageThumbnailer } from '@/components/image_thumbnailer';
+import { ImageThumbnail } from '@/components/image_thumbnail';
 import { PromptLibrarySelector } from '@/components/prompt-library-selector';
 import { LLMSelector } from '@/components/llm-selector';
-import { Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, Image as ImageIcon } from 'lucide-react';
 
 const API_NAME = 'hazo_llm_image_text';
 
@@ -252,21 +252,14 @@ export default function LLMTestImagePage() {
               </p>
             </div>
           ) : (
-            <div className="cls_image_preview relative border rounded-lg p-4 bg-muted/30">
-              <button
-                className="cls_remove_image_btn absolute top-2 right-2 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90 z-10"
-                onClick={remove_image}
-              >
-                <X className="h-4 w-4" />
-              </button>
+            <div className="cls_image_preview border rounded-lg p-4 bg-muted/30">
               <div className="flex items-center gap-4">
-                <div className="cls_image_thumbnail">
-                  <ImageThumbnailer
-                    src={uploaded_image.preview}
-                    alt="Uploaded preview"
-                    size="lg"
-                  />
-                </div>
+                <ImageThumbnail
+                  src={uploaded_image.preview}
+                  alt="Uploaded preview"
+                  size="lg"
+                  on_remove={remove_image}
+                />
                 <div className="cls_image_info flex-1">
                   <p className="font-medium truncate">{uploaded_image.file.name}</p>
                   <p className="text-sm text-muted-foreground">

@@ -11,9 +11,9 @@
 import { useState, useRef } from 'react';
 import { Layout } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { ImageThumbnailer } from '@/components/image_thumbnailer';
+import { ImageThumbnail } from '@/components/image_thumbnail';
 import { LLMSelector } from '@/components/llm-selector';
-import { Wand2, Loader2, Download, Upload, Image as ImageIcon } from 'lucide-react';
+import { Wand2, Loader2, Upload, Image as ImageIcon } from 'lucide-react';
 
 const API_NAME = 'hazo_llm_image_image';
 
@@ -212,29 +212,21 @@ export default function LLMTestImageImagePage() {
           
           {uploaded_image ? (
             <div className="cls_uploaded_image_preview flex items-start gap-4 p-4 border rounded-lg bg-muted/30">
-              <div className="relative">
-                <ImageThumbnailer
-                  src={uploaded_image.preview}
-                  alt="Uploaded image"
-                  size="xl"
-                />
-                <button
-                  className="cls_change_image_btn absolute bottom-1 right-1 p-1.5 bg-background/90 hover:bg-background rounded border text-xs z-10"
-                  onClick={() => file_input_ref.current?.click()}
-                  disabled={loading}
-                  title="Change image"
-                >
-                  <Upload className="h-3 w-3" />
-                </button>
-              </div>
+              <ImageThumbnail
+                src={uploaded_image.preview}
+                alt="Uploaded image"
+                size="xl"
+                on_remove={handle_remove_image}
+              />
               <div className="flex-1">
                 <p className="text-sm text-muted-foreground mb-2">Image uploaded</p>
                 <button
-                  className="text-xs text-destructive hover:underline"
-                  onClick={handle_remove_image}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                  onClick={() => file_input_ref.current?.click()}
                   disabled={loading}
                 >
-                  Remove image
+                  <Upload className="h-3 w-3" />
+                  Change image
                 </button>
               </div>
             </div>
@@ -302,21 +294,13 @@ export default function LLMTestImageImagePage() {
           ) : generated_image ? (
             <div className="cls_result_content space-y-4">
               <p className="text-sm text-muted-foreground">Transformed Image (click to enlarge):</p>
-              <div className="cls_generated_image_wrapper relative inline-block">
-                <ImageThumbnailer
-                  src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
-                  alt="Transformed image"
-                  size="auto"
-                  className="shadow-lg"
-                />
-                <button
-                  className="cls_download_btn absolute top-2 right-2 p-2 bg-background/80 hover:bg-background rounded-full shadow-md transition-colors z-10"
-                  onClick={handle_download}
-                  title="Download image"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-              </div>
+              <ImageThumbnail
+                src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
+                alt="Transformed image"
+                size="auto"
+                className="shadow-lg"
+                on_download={handle_download}
+              />
 
               {/* Response Text */}
               {response_text && (

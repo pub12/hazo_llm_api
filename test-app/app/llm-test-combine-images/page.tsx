@@ -11,9 +11,9 @@
 import { useState, useCallback } from 'react';
 import { Layout } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { ImageThumbnailer } from '@/components/image_thumbnailer';
+import { ImageThumbnail } from '@/components/image_thumbnail';
 import { LLMSelector } from '@/components/llm-selector';
-import { Layers, Loader2, ImageIcon, Download, X, Upload } from 'lucide-react';
+import { Layers, Loader2, ImageIcon, Upload } from 'lucide-react';
 
 const API_NAME = 'hazo_llm_image_image';
 
@@ -209,25 +209,15 @@ export default function LLMTestCombineImagesPage() {
                   className="cls_image_slot relative w-40 h-40 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted/30 overflow-hidden"
                 >
                   {image ? (
-                    <>
-                      <ImageThumbnailer
-                        src={image.preview}
-                        alt={`Image ${index + 1}`}
-                        size="xl"
-                        rounded={false}
-                        bordered={false}
-                        className="w-full h-full"
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          remove_image(image.id);
-                        }}
-                        className="cls_remove_image_btn absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 z-10"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </>
+                    <ImageThumbnail
+                      src={image.preview}
+                      alt={`Image ${index + 1}`}
+                      size="xl"
+                      rounded={false}
+                      bordered={false}
+                      className="w-full h-full"
+                      on_remove={() => remove_image(image.id)}
+                    />
                   ) : (
                     <div className="text-center text-muted-foreground">
                       <ImageIcon className="h-8 w-8 mx-auto mb-1 opacity-50" />
@@ -303,21 +293,13 @@ export default function LLMTestCombineImagesPage() {
             <div className="cls_generated_content space-y-4">
               {/* Generated Image */}
               <p className="text-sm text-muted-foreground">Click image to enlarge:</p>
-              <div className="cls_generated_image_wrapper relative inline-block">
-                <ImageThumbnailer
-                  src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
-                  alt="Combined image"
-                  size="auto"
-                  className="shadow-lg"
-                />
-                <button
-                  className="cls_download_btn absolute top-2 right-2 p-2 bg-background/80 hover:bg-background rounded-full shadow-md transition-colors z-10"
-                  onClick={handle_download}
-                  title="Download image"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-              </div>
+              <ImageThumbnail
+                src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
+                alt="Combined image"
+                size="auto"
+                className="shadow-lg"
+                on_download={handle_download}
+              />
 
               {/* Response Text */}
               {response_text && (

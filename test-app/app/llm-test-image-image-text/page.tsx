@@ -14,9 +14,9 @@
 import { useState, useRef } from 'react';
 import { Layout } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { ImageThumbnailer } from '@/components/image_thumbnailer';
+import { ImageThumbnail } from '@/components/image_thumbnail';
 import { LLMSelector } from '@/components/llm-selector';
-import { Layers, Loader2, Download, Plus, X, ArrowDown, Upload, Image as ImageIcon, ScrollText } from 'lucide-react';
+import { Layers, Loader2, Plus, X, ArrowDown, Upload, Image as ImageIcon, ScrollText } from 'lucide-react';
 
 const API_NAME = 'hazo_llm_image_image_text';
 
@@ -106,22 +106,22 @@ function ImageUpload({ image, label, on_update, disabled }: ImageUploadProps) {
       />
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {image.preview ? (
-        <div className="cls_image_preview_container relative">
-          <ImageThumbnailer
+        <div className="cls_image_preview_container">
+          <ImageThumbnail
             src={image.preview}
             alt={label}
             size="md"
           />
           <button
-            className="cls_change_image_btn absolute bottom-1 right-1 p-1 bg-background/90 hover:bg-background rounded text-xs border z-10"
+            className="cls_change_image_btn mt-1 text-xs text-primary hover:underline flex items-center gap-1"
             onClick={(e) => {
               e.stopPropagation();
               file_input_ref.current?.click();
             }}
             disabled={disabled}
-            title="Change image"
           >
             <Upload className="h-3 w-3" />
+            Change
           </button>
         </div>
       ) : (
@@ -622,7 +622,7 @@ export default function LLMTestImageImageTextPage() {
                           Step {img.step} Result
                         </span>
                       </div>
-                      <ImageThumbnailer
+                      <ImageThumbnail
                         src={`data:${img.mime_type};base64,${img.base64}`}
                         alt={`Step ${img.step} result`}
                         size="md"
@@ -638,21 +638,13 @@ export default function LLMTestImageImageTextPage() {
             {generated_image && (
               <div className="cls_result_image_section mb-4">
                 <p className="text-sm text-muted-foreground mb-2">Final Image (click to enlarge):</p>
-                <div className="cls_result_image_wrapper relative inline-block">
-                  <ImageThumbnailer
-                    src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
-                    alt="Chained result"
-                    size="auto"
-                    className="shadow-lg"
-                  />
-                  <button
-                    className="cls_download_btn absolute top-2 right-2 p-2 bg-background/80 hover:bg-background rounded-full shadow-md transition-colors z-10"
-                    onClick={handle_download}
-                    title="Download image"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
-                </div>
+                <ImageThumbnail
+                  src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
+                  alt="Chained result"
+                  size="auto"
+                  className="shadow-lg"
+                  on_download={handle_download}
+                />
               </div>
             )}
 

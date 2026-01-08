@@ -13,9 +13,9 @@
 import { useState } from 'react';
 import { Layout } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { ImageThumbnailer } from '@/components/image_thumbnailer';
+import { ImageThumbnail } from '@/components/image_thumbnail';
 import { LLMSelector } from '@/components/llm-selector';
-import { Workflow, Loader2, ImageIcon, Download, ArrowRight, ScrollText } from 'lucide-react';
+import { Workflow, Loader2, ImageIcon, ArrowRight, ScrollText } from 'lucide-react';
 
 const API_NAME = 'hazo_llm_text_image_text';
 
@@ -324,21 +324,13 @@ export default function LLMTestTextImageTextPage() {
               {generated_image && (
                 <div className="cls_generated_image_section">
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Generated Image (click to enlarge):</h3>
-                  <div className="cls_generated_image_wrapper relative inline-block">
-                    <ImageThumbnailer
-                      src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
-                      alt="Generated image"
-                      size="auto"
-                      className="shadow-lg max-h-[300px]"
-                    />
-                    <button
-                      className="cls_download_btn absolute top-2 right-2 p-2 bg-background/80 hover:bg-background rounded-full shadow-md transition-colors z-10"
-                      onClick={handle_download}
-                      title="Download image"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <ImageThumbnail
+                    src={`data:${generated_image.mime_type};base64,${generated_image.base64}`}
+                    alt="Generated image"
+                    size="auto"
+                    className="shadow-lg max-h-[300px]"
+                    on_download={handle_download}
+                  />
                 </div>
               )}
 
