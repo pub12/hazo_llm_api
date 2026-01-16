@@ -8,7 +8,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FlaskConical, Image, Sparkles, Layers, Workflow, GitMerge, Wand2, Settings, Link2 } from 'lucide-react';
+import { Home, FlaskConical, Image, Sparkles, Layers, Workflow, GitMerge, Wand2, Settings, Link2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarItem {
@@ -32,6 +32,11 @@ const sidebar_items: SidebarItem[] = [
     title: 'Image → Text',
     href: '/llm-test-image',
     icon: <Image className="h-4 w-4" />,
+  },
+  {
+    title: 'Document → Text',
+    href: '/llm-test-document',
+    icon: <FileText className="h-4 w-4" />,
   },
   {
     title: 'Text → Image',

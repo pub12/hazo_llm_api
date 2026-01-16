@@ -267,11 +267,11 @@ export interface CallLLMParams {
 // =============================================================================
 
 /**
- * Prompt record from the prompts_library table
+ * Prompt record from the hazo_prompts table
  */
 export interface PromptRecord {
-  /** Unique identifier for the prompt */
-  uuid: string;
+  /** Unique identifier for the prompt (UUID) */
+  id: string;
 
   /** Area/category of the prompt */
   prompt_area: string;
@@ -297,6 +297,18 @@ export interface PromptRecord {
    */
   local_3: string | null;
 
+  /**
+   * User ID - optional identifier for user-specific prompts
+   * Example: user UUID, username, or other user identifier
+   */
+  user_id: string | null;
+
+  /**
+   * Scope ID - optional identifier for scope-specific prompts
+   * Example: organization ID, project ID, or other scope identifier
+   */
+  scope_id: string | null;
+
   /** The actual prompt text */
   prompt_text: string;
 
@@ -310,7 +322,7 @@ export interface PromptRecord {
   created_at: string;
 
   /** Timestamp when the record was last changed */
-  changed_by: string;
+  changed_at: string;
 }
 
 // =============================================================================
@@ -511,18 +523,38 @@ export interface TextImageParams {
 export interface ImageImageParams {
   /** Prompt/instruction for transforming the image(s) */
   prompt: string;
-  
+
   /** Base64 encoded input image data (for single image, use this OR images array) */
   image_b64?: string;
-  
+
   /** MIME type of the input image (for single image) */
   image_mime_type?: string;
-  
+
   /** Array of input images (for multiple images) */
   images?: Base64Data[];
-  
+
   /** Variables to substitute in the prompt text */
   prompt_variables?: PromptVariables;
+}
+
+/**
+ * Parameters for hazo_llm_document_text (document input → text output)
+ */
+export interface DocumentTextParams {
+  /** Prompt/instruction for analyzing the document */
+  prompt: string;
+
+  /** Base64 encoded document data */
+  document_b64: string;
+
+  /** MIME type of the document (e.g., "application/pdf") */
+  document_mime_type: string;
+
+  /** Variables to substitute in the prompt text */
+  prompt_variables?: PromptVariables;
+
+  /** Maximum number of pages to process (optional, for large documents) */
+  max_pages?: number;
 }
 
 /**
@@ -697,6 +729,9 @@ export interface LLMApiClient {
 
   /** Images → Image → Text (chain image transformations then describe) */
   hazo_llm_image_image_text: (params: ImageImageTextParams, llm?: ProviderName) => Promise<LLMResponse>;
+
+  /** Document input → Text output (document analysis) */
+  hazo_llm_document_text: (params: DocumentTextParams, llm?: ProviderName) => Promise<LLMResponse>;
 
   /** Execute a chain of prompts with dynamic value resolution */
   hazo_llm_prompt_chain: (params: PromptChainParams, llm?: ProviderName) => Promise<PromptChainResponse>;

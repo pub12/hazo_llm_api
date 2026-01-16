@@ -1,15 +1,16 @@
 /**
  * LLM API Module
- * 
+ *
  * Main entry point for the LLM API functionality.
  * Provides initialization and specialized LLM functions:
  * - hazo_llm_text_text: Text input → Text output
  * - hazo_llm_image_text: Image input → Text output
  * - hazo_llm_text_image: Text input → Image output
  * - hazo_llm_image_image: Image input → Image output
+ * - hazo_llm_document_text: Document input → Text output (PDF analysis)
  * - hazo_llm_text_image_text: Text → Image → Text (chained)
  * - hazo_llm_image_image_text: Images → Image → Text (chained)
- * 
+ *
  * Database is auto-initialized on module import using config defaults.
  */
 
@@ -23,6 +24,7 @@ import type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   TextImageTextParams,
   ImageImageTextParams,
   PromptChainParams,
@@ -39,6 +41,7 @@ import { hazo_llm_image_image as hazo_llm_image_image_internal } from './hazo_ll
 import { hazo_llm_text_image_text as hazo_llm_text_image_text_internal } from './hazo_llm_text_image_text.js';
 import { hazo_llm_image_image_text as hazo_llm_image_image_text_internal } from './hazo_llm_image_image_text.js';
 import { hazo_llm_prompt_chain as hazo_llm_prompt_chain_internal } from './hazo_llm_prompt_chain.js';
+import { hazo_llm_document_text as hazo_llm_document_text_internal } from './hazo_llm_document_text.js';
 import { get_gemini_api_url } from '../providers/gemini/gemini_client.js';
 import {
   register_provider,
@@ -552,6 +555,7 @@ function load_gemini_provider_from_config(logger: Logger): GeminiProvider | null
       model_image_text: gemini_section.model_image_text,
       model_text_image: gemini_section.model_text_image,
       model_image_image: gemini_section.model_image_image,
+      model_document_text: gemini_section.model_document_text,
       text_config,
       image_config,
       capabilities: capabilities.length > 0 ? capabilities : undefined,
@@ -983,6 +987,9 @@ export async function initialize_llm_api(config: LLMApiConfig = {}): Promise<LLM
     hazo_llm_image_image_text: async (params: ImageImageTextParams, llm?: ProviderName): Promise<LLMResponse> => {
       return hazo_llm_image_image_text(params, llm);
     },
+    hazo_llm_document_text: async (params: DocumentTextParams, llm?: ProviderName): Promise<LLMResponse> => {
+      return hazo_llm_document_text(params, llm);
+    },
     hazo_llm_prompt_chain: async (params: PromptChainParams, llm?: ProviderName): Promise<PromptChainResponse> => {
       return hazo_llm_prompt_chain(params, llm);
     },
@@ -1142,6 +1149,35 @@ export async function hazo_llm_image_image_text(params: ImageImageTextParams, ll
     const config = check_initialized();
     const db = get_database();
     return hazo_llm_image_image_text_internal(params, db, config, llm);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Document input → Text output
+ * Analyze a document (PDF) and get text analysis/description
+ *
+ * @param params - Document input parameters
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified). Use LLM_PROVIDERS constants for type safety.
+ * @returns LLM response with text analysis
+ *
+ * @example
+ * ```typescript
+ * import { hazo_llm_document_text, LLM_PROVIDERS } from 'hazo_llm_api/server';
+ *
+ * const response = await hazo_llm_document_text({
+ *   prompt: 'Summarize this document',
+ *   document_b64: base64EncodedPdf,
+ *   document_mime_type: 'application/pdf',
+ * }, LLM_PROVIDERS.GEMINI);
+ * ```
+ */
+export async function hazo_llm_document_text(params: DocumentTextParams, llm?: ProviderName): Promise<LLMResponse> {
+  try {
+    const config = check_initialized();
+    const db = get_database();
+    return hazo_llm_document_text_internal(params, db, config, llm);
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -1382,6 +1418,7 @@ export type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   TextImageTextParams,
   ImageImageTextParams,
   ChainImage,

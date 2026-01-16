@@ -35,7 +35,8 @@
   "files": [
     "dist",
     "README.md",
-    "techdoc.md"
+    "techdoc.md",
+    "config/hazo_llm_api_config.ini"
   ],
   "workspaces": [
     "test-app"

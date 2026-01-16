@@ -1,23 +1,39 @@
 /**
- * Prompt by UUID API Route
- * 
- * API route for managing individual prompts by UUID.
- * Provides GET (single), PUT (update), and DELETE endpoints.
+ * Bulk Prompts API Route
+ *
+ * API route for bulk operations on prompts.
+ * Provides DELETE (bulk delete) and POST (bulk import) endpoints.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import {
-  get_prompt_by_id,
-  update_prompt,
+  insert_prompt,
   delete_prompt,
   is_initialized,
   get_database,
   initialize_llm_api
 } from 'hazo_llm_api/server';
-import type { Logger } from 'hazo_llm_api';
+import type { Logger, PromptRecord } from 'hazo_llm_api';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+interface ExportedPrompt {
+  prompt_area: string;
+  prompt_key: string;
+  local_1?: string | null;
+  local_2?: string | null;
+  local_3?: string | null;
+  user_id?: string | null;
+  scope_id?: string | null;
+  prompt_text: string;
+  prompt_variables?: Array<{ name: string; description: string }>;
+  prompt_notes?: string;
+}
 
 // =============================================================================
 // Config Reader
@@ -34,11 +50,11 @@ interface AppConfig {
  */
 function get_app_config(): AppConfig {
   const config_path = path.resolve(process.cwd(), '..', 'config', 'hazo_llm_api_config.ini');
-  
+
   try {
     const config_content = fs.readFileSync(config_path, 'utf-8');
     const config = ini.parse(config_content);
-    
+
     return {
       api_url: config.gemini?.api_url || 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
       api_url_image: config.gemini?.api_url_image || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent',
@@ -72,13 +88,13 @@ const test_logger: Logger = {
 async function ensure_initialized(): Promise<boolean> {
   if (!is_initialized()) {
     const api_key = process.env.GEMINI_API_KEY;
-    
+
     if (!api_key) {
       return false;
     }
-    
+
     const app_config = get_app_config();
-    
+
     try {
       await initialize_llm_api({
         logger: test_logger,
@@ -86,28 +102,23 @@ async function ensure_initialized(): Promise<boolean> {
       });
     } catch (error) {
       test_logger.error('Failed to initialize LLM API', {
-        file: 'prompts/[uuid]/route.ts',
-        line: 85,
+        file: 'prompts/bulk/route.ts',
+        line: 95,
         data: { error: error instanceof Error ? error.message : String(error) },
       });
       return false;
     }
   }
-  
+
   return true;
 }
 
 // =============================================================================
-// GET Handler - Get single prompt by UUID
+// DELETE Handler - Bulk delete prompts
 // =============================================================================
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ uuid: string }> }
-) {
+export async function DELETE(request: Request) {
   try {
-    const { uuid } = await params;
-    
     const init_success = await ensure_initialized();
     if (!init_success) {
       return NextResponse.json(
@@ -115,7 +126,7 @@ export async function GET(
         { status: 500 }
       );
     }
-    
+
     const db = get_database();
     if (!db) {
       return NextResponse.json(
@@ -123,105 +134,52 @@ export async function GET(
         { status: 500 }
       );
     }
-    
-    const prompt = get_prompt_by_id(db, uuid, test_logger);
-    
-    if (!prompt) {
-      return NextResponse.json(
-        { success: false, error: 'Prompt not found' },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json({ success: true, data: prompt });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
-  }
-}
 
-// =============================================================================
-// PUT Handler - Update prompt by UUID
-// =============================================================================
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ uuid: string }> }
-) {
-  try {
-    const { uuid } = await params;
-    
-    const init_success = await ensure_initialized();
-    if (!init_success) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to initialize database. Check GEMINI_API_KEY.' },
-        { status: 500 }
-      );
-    }
-    
-    const db = get_database();
-    if (!db) {
-      return NextResponse.json(
-        { success: false, error: 'Database connection failed' },
-        { status: 500 }
-      );
-    }
-    
     const body = await request.json();
-    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes } = body;
+    const { ids } = body as { ids: string[] };
 
-    const updates: Record<string, string | null> = {};
-    if (prompt_area !== undefined) updates.prompt_area = prompt_area;
-    if (prompt_key !== undefined) updates.prompt_key = prompt_key;
-    if (local_1 !== undefined) updates.local_1 = local_1 || null;
-    if (local_2 !== undefined) updates.local_2 = local_2 || null;
-    if (local_3 !== undefined) updates.local_3 = local_3 || null;
-    if (user_id !== undefined) updates.user_id = user_id || null;
-    if (scope_id !== undefined) updates.scope_id = scope_id || null;
-    if (prompt_text !== undefined) updates.prompt_text = prompt_text;
-    if (prompt_variables !== undefined) updates.prompt_variables = prompt_variables;
-    if (prompt_notes !== undefined) updates.prompt_notes = prompt_notes;
-    
-    if (Object.keys(updates).length === 0) {
+    if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No fields to update' },
+        { success: false, error: 'No IDs provided for deletion' },
         { status: 400 }
       );
     }
-    
-    const updated_prompt = update_prompt(db, uuid, updates, test_logger);
-    
-    if (!updated_prompt) {
-      return NextResponse.json(
-        { success: false, error: 'Prompt not found or update failed' },
-        { status: 404 }
-      );
+
+    let deleted_count = 0;
+    const errors: string[] = [];
+
+    for (const id of ids) {
+      try {
+        const deleted = delete_prompt(db, id, test_logger);
+        if (deleted) {
+          deleted_count++;
+        } else {
+          errors.push(`Prompt ${id} not found`);
+        }
+      } catch (err) {
+        errors.push(`Failed to delete ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
-    
-    return NextResponse.json({ success: true, data: updated_prompt });
+
+    return NextResponse.json({
+      success: deleted_count > 0,
+      deleted_count,
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
 }
 
 // =============================================================================
-// DELETE Handler - Delete prompt by UUID
+// POST Handler - Bulk import prompts
 // =============================================================================
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ uuid: string }> }
-) {
+export async function POST(request: Request) {
   try {
-    const { uuid } = await params;
-    
     const init_success = await ensure_initialized();
     if (!init_success) {
       return NextResponse.json(
@@ -229,7 +187,7 @@ export async function DELETE(
         { status: 500 }
       );
     }
-    
+
     const db = get_database();
     if (!db) {
       return NextResponse.json(
@@ -237,24 +195,60 @@ export async function DELETE(
         { status: 500 }
       );
     }
-    
-    const deleted = delete_prompt(db, uuid, test_logger);
-    
-    if (!deleted) {
+
+    const body = await request.json();
+    const { prompts } = body as { prompts: ExportedPrompt[] };
+
+    if (!Array.isArray(prompts) || prompts.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Prompt not found' },
-        { status: 404 }
+        { success: false, error: 'No prompts provided for import' },
+        { status: 400 }
       );
     }
-    
-    return NextResponse.json({ success: true, message: 'Prompt deleted successfully' });
+
+    let imported_count = 0;
+    const errors: string[] = [];
+
+    for (const prompt of prompts) {
+      // Validate required fields
+      if (!prompt.prompt_area || !prompt.prompt_key || !prompt.prompt_text) {
+        errors.push(`Invalid prompt: missing required fields (area: ${prompt.prompt_area || 'missing'}, key: ${prompt.prompt_key || 'missing'})`);
+        continue;
+      }
+
+      try {
+        const new_prompt: PromptRecord = {
+          id: crypto.randomUUID(),
+          prompt_area: prompt.prompt_area,
+          prompt_key: prompt.prompt_key,
+          local_1: prompt.local_1 || null,
+          local_2: prompt.local_2 || null,
+          local_3: prompt.local_3 || null,
+          user_id: prompt.user_id || null,
+          scope_id: prompt.scope_id || null,
+          prompt_text: prompt.prompt_text,
+          prompt_variables: JSON.stringify(prompt.prompt_variables || []),
+          prompt_notes: prompt.prompt_notes || '',
+          created_at: new Date().toISOString(),
+          changed_at: new Date().toISOString(),
+        };
+
+        insert_prompt(db, new_prompt, test_logger);
+        imported_count++;
+      } catch (err) {
+        errors.push(`Failed to import ${prompt.prompt_area}/${prompt.prompt_key}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return NextResponse.json({
+      success: imported_count > 0,
+      imported_count,
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
 }
-
-

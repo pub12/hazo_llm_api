@@ -1,7 +1,7 @@
 /**
  * Prompt Retrieval Module
  *
- * Functions to retrieve prompts from the prompts_library database table.
+ * Functions to retrieve prompts from the hazo_prompts database table.
  * Searches by prompt_area, prompt_key, and optional local filters.
  */
 
@@ -43,7 +43,7 @@ export function get_prompt_by_area_and_key(
   const file_name = 'get_prompt.ts';
 
   const select_sql = `
-    SELECT * FROM prompts_library
+    SELECT * FROM hazo_prompts
     WHERE prompt_area = ? AND prompt_key = ?
     AND local_1 IS NULL AND local_2 IS NULL AND local_3 IS NULL
     LIMIT 1
@@ -75,7 +75,7 @@ export function get_prompt_by_area_and_key(
       file: file_name,
       line: 82,
       data: {
-        uuid: record.uuid,
+        id: record.id,
         prompt_area: record.prompt_area,
         prompt_key: record.prompt_key,
       },
@@ -136,7 +136,7 @@ export function get_prompt_by_area_key_and_locals(
     // Level 1: All three locals specified
     if (locals.local_1 && locals.local_2 && locals.local_3) {
       fallback_queries.push({
-        sql: `SELECT * FROM prompts_library
+        sql: `SELECT * FROM hazo_prompts
               WHERE prompt_area = ? AND prompt_key = ?
               AND local_1 = ? AND local_2 = ? AND local_3 = ?
               LIMIT 1`,
@@ -148,7 +148,7 @@ export function get_prompt_by_area_key_and_locals(
     // Level 2: local_1 and local_2 specified
     if (locals.local_1 && locals.local_2) {
       fallback_queries.push({
-        sql: `SELECT * FROM prompts_library
+        sql: `SELECT * FROM hazo_prompts
               WHERE prompt_area = ? AND prompt_key = ?
               AND local_1 = ? AND local_2 = ? AND local_3 IS NULL
               LIMIT 1`,
@@ -160,7 +160,7 @@ export function get_prompt_by_area_key_and_locals(
     // Level 3: Only local_1 specified
     if (locals.local_1) {
       fallback_queries.push({
-        sql: `SELECT * FROM prompts_library
+        sql: `SELECT * FROM hazo_prompts
               WHERE prompt_area = ? AND prompt_key = ?
               AND local_1 = ? AND local_2 IS NULL AND local_3 IS NULL
               LIMIT 1`,
@@ -171,7 +171,7 @@ export function get_prompt_by_area_key_and_locals(
 
     // Level 4: Base prompt (no locals)
     fallback_queries.push({
-      sql: `SELECT * FROM prompts_library
+      sql: `SELECT * FROM hazo_prompts
             WHERE prompt_area = ? AND prompt_key = ?
             AND local_1 IS NULL AND local_2 IS NULL AND local_3 IS NULL
             LIMIT 1`,
@@ -191,7 +191,7 @@ export function get_prompt_by_area_key_and_locals(
         logger.info('Prompt retrieved with local filters', {
           file: file_name,
           data: {
-            uuid: record.uuid,
+            id: record.id,
             prompt_area: record.prompt_area,
             prompt_key: record.prompt_key,
             local_1: record.local_1,
@@ -269,7 +269,7 @@ export function get_prompts_by_area(
   const file_name = 'get_prompt.ts';
   
   const select_sql = `
-    SELECT * FROM prompts_library 
+    SELECT * FROM hazo_prompts 
     WHERE prompt_area = ?
     ORDER BY prompt_key
   `;
@@ -314,59 +314,59 @@ export function get_prompts_by_area(
 }
 
 /**
- * Get a prompt by its UUID
+ * Get a prompt by its ID (UUID)
  * @param db - Database instance
- * @param uuid - UUID of the prompt
+ * @param id - ID (UUID) of the prompt
  * @param logger - Logger instance
  * @returns The prompt record if found, null otherwise
  */
-export function get_prompt_by_uuid(
+export function get_prompt_by_id(
   db: SqlJsDatabase,
-  uuid: string,
+  id: string,
   logger: Logger
 ): PromptRecord | null {
   const file_name = 'get_prompt.ts';
-  
+
   const select_sql = `
-    SELECT * FROM prompts_library 
-    WHERE uuid = ?
+    SELECT * FROM hazo_prompts
+    WHERE id = ?
   `;
-  
+
   try {
-    logger.debug('Retrieving prompt by UUID', {
+    logger.debug('Retrieving prompt by ID', {
       file: file_name,
       line: 211,
-      data: { uuid },
+      data: { id },
     });
-    
-    const result = db.exec(select_sql, [uuid]);
-    
+
+    const result = db.exec(select_sql, [id]);
+
     if (result.length === 0 || result[0].values.length === 0) {
-      logger.warn('Prompt not found by UUID', {
+      logger.warn('Prompt not found by ID', {
         file: file_name,
         line: 219,
-        data: { uuid },
+        data: { id },
       });
       return null;
     }
-    
+
     const row = result[0].values[0];
     const columns = result[0].columns;
     const record = row_to_prompt_record(row, columns);
-    
-    logger.info('Prompt retrieved by UUID', {
+
+    logger.info('Prompt retrieved by ID', {
       file: file_name,
       line: 229,
-      data: { uuid },
+      data: { id },
     });
-    
+
     return record;
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
-    logger.error('Failed to retrieve prompt by UUID', {
+    logger.error('Failed to retrieve prompt by ID', {
       file: file_name,
       line: 237,
-      data: { error: error_message, uuid },
+      data: { error: error_message, id },
     });
     throw error;
   }
@@ -385,7 +385,7 @@ export function get_all_prompts(
   const file_name = 'get_prompt.ts';
   
   const select_sql = `
-    SELECT * FROM prompts_library 
+    SELECT * FROM hazo_prompts 
     ORDER BY prompt_area, prompt_key
   `;
   

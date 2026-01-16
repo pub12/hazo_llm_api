@@ -9,7 +9,7 @@ export {
   get_prompt_by_area_key_and_locals,
   get_prompt_text,
   get_prompts_by_area,
-  get_prompt_by_uuid,
+  get_prompt_by_id,
   get_all_prompts,
   type LocalFilterOptions,
 } from './get_prompt.js';

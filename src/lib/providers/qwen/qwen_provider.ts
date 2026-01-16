@@ -15,6 +15,7 @@ import type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   LLMResponse,
   Logger,
   Base64Data,
@@ -174,6 +175,8 @@ export class QwenProvider implements LLMProvider {
         return this.model_text_image;
       case SERVICE_TYPES.IMAGE_IMAGE:
         return this.model_image_image;
+      case SERVICE_TYPES.DOCUMENT_TEXT:
+        return undefined;  // Document text not supported via base64 in Qwen
       default:
         return undefined;
     }
@@ -194,6 +197,7 @@ export class QwenProvider implements LLMProvider {
         [SERVICE_TYPES.IMAGE_TEXT]: 'model_image_text',
         [SERVICE_TYPES.TEXT_IMAGE]: 'model_text_image',
         [SERVICE_TYPES.IMAGE_IMAGE]: 'model_image_image',
+        [SERVICE_TYPES.DOCUMENT_TEXT]: 'model_document_text',
       };
       const config_key = config_key_map[service_type] || 'model';
       throw new Error(
@@ -453,6 +457,39 @@ export class QwenProvider implements LLMProvider {
       });
       return { success: false, error: error_message };
     }
+  }
+
+  /**
+   * Document input → Text output
+   * Analyze a document (PDF) and generate text description
+   *
+   * NOTE: Qwen-Doc-Turbo requires document URL (not base64 data).
+   * This is a limitation for v1 - returns informative error directing users to Gemini.
+   * Future enhancement: Convert PDF pages to images and use Qwen-VL.
+   *
+   * @param params - Document input parameters
+   * @param logger - Logger instance
+   * @returns LLM response with error (Qwen requires URL-based document access)
+   */
+  async document_text(params: DocumentTextParams, logger: Logger): Promise<LLMResponse> {
+    const file_name = 'qwen_provider.ts';
+
+    logger.warn('Qwen document_text: PDF analysis with base64 data not supported', {
+      file: file_name,
+      data: {
+        document_mime_type: params.document_mime_type,
+        prompt_length: params.prompt.length,
+      },
+    });
+
+    // Qwen-Doc-Turbo requires document URL, not base64 data
+    // For v1, return informative error directing users to Gemini
+    return {
+      success: false,
+      error: 'Qwen document analysis requires a publicly accessible document URL (doc_url parameter). ' +
+        'Base64 document data is not supported by Qwen-Doc-Turbo. ' +
+        'Please use Gemini provider for base64 PDF analysis, or provide a document URL.',
+    };
   }
 }
 

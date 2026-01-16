@@ -13,6 +13,7 @@ import {
   hazo_llm_image_text,
   hazo_llm_text_image,
   hazo_llm_image_image,
+  hazo_llm_document_text,
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
   hazo_llm_prompt_chain,
@@ -20,7 +21,7 @@ import {
   get_database,
   is_initialized,
 } from 'hazo_llm_api/server';
-import type { Logger, TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, TextImageTextParams, ImageImageTextParams, ChainImage, PromptChainParams } from 'hazo_llm_api/server';
+import type { Logger, TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, DocumentTextParams, TextImageTextParams, ImageImageTextParams, ChainImage, PromptChainParams } from 'hazo_llm_api/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
@@ -171,7 +172,11 @@ export async function POST(request: NextRequest) {
       case 'base64_image':
         result = await test_base64_image(body, llm);
         break;
-        
+
+      case 'document_text':
+        result = await test_document_text(body, llm);
+        break;
+
       case 'error_handling':
         result = await test_error_handling(body, llm);
         break;
@@ -369,6 +374,47 @@ async function test_base64_image(body: Record<string, unknown>, llm?: string): P
 }
 
 /**
+ * Test: Document to Text
+ * Test document analysis with hazo_llm_document_text
+ */
+async function test_document_text(body: Record<string, unknown>, llm?: string): Promise<TestResult> {
+  const document_b64 = body.document_b64 as string;
+  const document_mime_type = (body.document_mime_type as string) || 'application/pdf';
+  const static_prompt = (body.static_prompt as string) || 'Summarize the key points of this document.';
+
+  if (!document_b64) {
+    return {
+      test_name: 'Document to Text',
+      success: false,
+      message: 'No document data provided',
+      error: 'document_b64 is required for this test',
+    };
+  }
+
+  const params: DocumentTextParams = {
+    prompt: static_prompt,
+    document_b64: document_b64,
+    document_mime_type: document_mime_type,
+  };
+
+  const response = await hazo_llm_document_text(params, llm);
+
+  return {
+    test_name: 'Document to Text',
+    success: response.success,
+    message: response.success
+      ? 'Document to text test passed'
+      : `Document to text test failed: ${response.error}`,
+    data: {
+      document_mime_type,
+      prompt: static_prompt,
+      response_text: response.text,
+    },
+    error: response.error,
+  };
+}
+
+/**
  * Test 5: Error Handling
  * Test with missing required fields and non-existent prompts
  */
@@ -449,6 +495,8 @@ async function insert_test_prompt_data(body: Record<string, unknown>): Promise<T
       local_1,
       local_2,
       local_3,
+      user_id: null,
+      scope_id: null,
       prompt_text,
       prompt_variables,
       prompt_notes,
@@ -459,7 +507,7 @@ async function insert_test_prompt_data(body: Record<string, unknown>): Promise<T
       success: true,
       message: 'Test prompt inserted successfully',
       data: {
-        uuid: inserted.uuid,
+        id: inserted.id,
         prompt_area: inserted.prompt_area,
         prompt_key: inserted.prompt_key,
       },

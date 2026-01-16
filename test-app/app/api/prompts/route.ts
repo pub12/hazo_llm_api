@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
-    const { prompt_area, prompt_key, local_1, local_2, local_3, prompt_text, prompt_variables, prompt_notes } = body;
+    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes } = body;
 
     if (!prompt_area || !prompt_key || !prompt_text) {
       return NextResponse.json(
@@ -157,17 +157,19 @@ export async function POST(request: Request) {
     }
 
     const new_prompt: PromptRecord = {
-      uuid: crypto.randomUUID(),
+      id: crypto.randomUUID(),
       prompt_area,
       prompt_key,
       local_1: local_1 || null,
       local_2: local_2 || null,
       local_3: local_3 || null,
+      user_id: user_id || null,
+      scope_id: scope_id || null,
       prompt_text,
       prompt_variables: prompt_variables || '[]',
       prompt_notes: prompt_notes || '',
       created_at: new Date().toISOString(),
-      changed_by: 'api_user',
+      changed_at: new Date().toISOString(),
     };
 
     insert_prompt(db, new_prompt, test_logger);

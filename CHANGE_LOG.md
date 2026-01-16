@@ -81,6 +81,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Bulk Operations for Prompts**: New UI and API features for managing multiple prompts
+  - Checkbox selection in prompts table (individual and select all)
+  - Bulk delete functionality for selected prompts
+  - Export selected prompts to JSON file with standardized format
+  - Import prompts from JSON file with validation and error reporting
+  - Tooltips on Export/Import buttons showing JSON format
+  - New shadcn components: `checkbox.tsx`, `tooltip.tsx`
+  - API endpoints: `POST /api/prompts/bulk` (import), `DELETE /api/prompts/bulk` (delete)
+  - Export filename format: `prompts_export_YYYY-MM-DD.json`
+  - Structured JSON format with version, timestamp, and prompts array
+
 ### Planned
 
 - Additional LLM providers (OpenAI, Anthropic, Cohere)

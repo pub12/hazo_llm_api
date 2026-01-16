@@ -167,19 +167,19 @@ export class PromptCache {
   }
 
   /**
-   * Get a prompt by UUID from the cache
+   * Get a prompt by ID from the cache
    *
-   * @param uuid - Prompt UUID
+   * @param id - Prompt ID (UUID)
    * @returns Cached prompt or null if not found/expired
    */
-  get_by_uuid(uuid: string): PromptRecord | null {
+  get_by_id(id: string): PromptRecord | null {
     if (!this.enabled) {
       return null;
     }
 
-    // Linear search through cache (UUID lookups are less common)
+    // Linear search through cache (ID lookups are less common)
     for (const entry of this.cache.values()) {
-      if (entry.prompt.uuid === uuid) {
+      if (entry.prompt.id === id) {
         if (this.is_expired(entry)) {
           // Let the area:key lookup handle deletion
           this.misses++;
@@ -228,13 +228,13 @@ export class PromptCache {
   }
 
   /**
-   * Remove a prompt by UUID from the cache
+   * Remove a prompt by ID from the cache
    *
-   * @param uuid - Prompt UUID
+   * @param id - Prompt ID (UUID)
    */
-  invalidate_by_uuid(uuid: string): void {
+  invalidate_by_id(id: string): void {
     for (const [key, entry] of this.cache.entries()) {
-      if (entry.prompt.uuid === uuid) {
+      if (entry.prompt.id === id) {
         this.cache.delete(key);
         break;
       }

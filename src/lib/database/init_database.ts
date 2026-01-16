@@ -3,7 +3,7 @@
  * 
  * Initializes and manages the SQLite database for prompt storage.
  * Uses sql.js for database operations (pure JavaScript SQLite).
- * Creates the prompts_library table if it doesn't exist.
+ * Creates the hazo_prompts table if it doesn't exist.
  */
 
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
@@ -190,7 +190,7 @@ export async function initialize_database(
       ? new SQL.Database(file_buffer)
       : new SQL.Database();
     
-    // Create prompts_library table if it doesn't exist
+    // Create hazo_prompts table if it doesn't exist
     create_prompts_table(db_instance, logger);
     
     // Save database to file
@@ -241,7 +241,7 @@ export function initialize_database_sync(
 // =============================================================================
 
 /**
- * Create the prompts_library table if it doesn't exist
+ * Create the hazo_prompts table if it doesn't exist
  * @param db - Database instance
  * @param logger - Logger instance
  */
@@ -249,41 +249,46 @@ function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
   const file_name = 'init_database.ts';
 
   const create_table_sql = `
-    CREATE TABLE IF NOT EXISTS prompts_library (
-      uuid TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS hazo_prompts (
+      id TEXT PRIMARY KEY,
       prompt_area TEXT NOT NULL,
       prompt_key TEXT NOT NULL,
       local_1 TEXT DEFAULT NULL,
       local_2 TEXT DEFAULT NULL,
       local_3 TEXT DEFAULT NULL,
+      user_id TEXT DEFAULT NULL,
+      scope_id TEXT DEFAULT NULL,
       prompt_text TEXT NOT NULL,
       prompt_variables TEXT DEFAULT '[]',
       prompt_notes TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
-      changed_by TEXT DEFAULT NULL
+      changed_at TEXT DEFAULT NULL
     )
   `;
 
   try {
     db.run(create_table_sql);
 
-    // Migrate existing tables: add local_1, local_2, local_3 columns if they don't exist
-    migrate_add_local_columns(db, logger);
+    // Migrate existing tables: add local_1, local_2, local_3, user_id, scope_id columns if they don't exist
+    migrate_add_optional_columns(db, logger);
 
-    // Create index for faster lookups by prompt_area, prompt_key, and local filters
+    // Migrate: rename changed_by to changed_at for existing databases
+    migrate_rename_changed_by_to_changed_at(db, logger);
+
+    // Create index for faster lookups by prompt_area, prompt_key, and filters
     const create_index_sql = `
       CREATE INDEX IF NOT EXISTS idx_prompts_area_key
-      ON prompts_library(prompt_area, prompt_key, local_1, local_2, local_3)
+      ON hazo_prompts(prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id)
     `;
     db.run(create_index_sql);
 
-    logger.debug('prompts_library table created/verified', {
+    logger.debug('hazo_prompts table created/verified', {
       file: file_name,
       line: 164,
     });
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
-    logger.error('Failed to create prompts_library table', {
+    logger.error('Failed to create hazo_prompts table', {
       file: file_name,
       line: 170,
       data: { error: error_message },
@@ -293,48 +298,78 @@ function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
 }
 
 /**
- * Migrate existing database: add local_1, local_2, local_3 columns if they don't exist
+ * Migrate existing database: add optional columns if they don't exist
+ * Handles: local_1, local_2, local_3, user_id, scope_id
  * @param db - Database instance
  * @param logger - Logger instance
  */
-function migrate_add_local_columns(db: SqlJsDatabase, logger: Logger): void {
+function migrate_add_optional_columns(db: SqlJsDatabase, logger: Logger): void {
   const file_name = 'init_database.ts';
 
+  // Define columns to migrate with their SQL definitions
+  const columns_to_add = [
+    { name: 'local_1', sql: 'ALTER TABLE hazo_prompts ADD COLUMN local_1 TEXT DEFAULT NULL' },
+    { name: 'local_2', sql: 'ALTER TABLE hazo_prompts ADD COLUMN local_2 TEXT DEFAULT NULL' },
+    { name: 'local_3', sql: 'ALTER TABLE hazo_prompts ADD COLUMN local_3 TEXT DEFAULT NULL' },
+    { name: 'user_id', sql: 'ALTER TABLE hazo_prompts ADD COLUMN user_id TEXT DEFAULT NULL' },
+    { name: 'scope_id', sql: 'ALTER TABLE hazo_prompts ADD COLUMN scope_id TEXT DEFAULT NULL' },
+  ];
+
   try {
-    // Check if local_1 column exists
-    const table_info = db.exec("PRAGMA table_info(prompts_library)");
+    // Check existing columns
+    const table_info = db.exec("PRAGMA table_info(hazo_prompts)");
     if (table_info.length === 0) {
       return; // Table doesn't exist yet
     }
 
-    const columns = table_info[0].values.map(row => row[1] as string);
+    const existing_columns = table_info[0].values.map(row => row[1] as string);
 
-    // Add local_1 if it doesn't exist
-    if (!columns.includes('local_1')) {
-      db.run('ALTER TABLE prompts_library ADD COLUMN local_1 TEXT DEFAULT NULL');
-      logger.info('Migration: Added local_1 column to prompts_library', {
-        file: file_name,
-      });
+    // Add each missing column
+    for (const column of columns_to_add) {
+      if (!existing_columns.includes(column.name)) {
+        db.run(column.sql);
+        logger.info(`Migration: Added ${column.name} column to hazo_prompts`, {
+          file: file_name,
+        });
+      }
+    }
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    logger.warn('Migration warning (may be harmless)', {
+      file: file_name,
+      data: { error: error_message },
+    });
+  }
+}
+
+/**
+ * Migrate existing database: rename changed_by column to changed_at
+ * This migration supports SQLite 3.25+ which added ALTER TABLE RENAME COLUMN
+ * @param db - Database instance
+ * @param logger - Logger instance
+ */
+function migrate_rename_changed_by_to_changed_at(db: SqlJsDatabase, logger: Logger): void {
+  const file_name = 'init_database.ts';
+
+  try {
+    // Check existing columns
+    const table_info = db.exec("PRAGMA table_info(hazo_prompts)");
+    if (table_info.length === 0) {
+      return; // Table doesn't exist yet
     }
 
-    // Add local_2 if it doesn't exist
-    if (!columns.includes('local_2')) {
-      db.run('ALTER TABLE prompts_library ADD COLUMN local_2 TEXT DEFAULT NULL');
-      logger.info('Migration: Added local_2 column to prompts_library', {
-        file: file_name,
-      });
-    }
+    const existing_columns = table_info[0].values.map(row => row[1] as string);
 
-    // Add local_3 if it doesn't exist
-    if (!columns.includes('local_3')) {
-      db.run('ALTER TABLE prompts_library ADD COLUMN local_3 TEXT DEFAULT NULL');
-      logger.info('Migration: Added local_3 column to prompts_library', {
+    // Only migrate if changed_by exists but changed_at does not
+    if (existing_columns.includes('changed_by') && !existing_columns.includes('changed_at')) {
+      db.run('ALTER TABLE hazo_prompts RENAME COLUMN changed_by TO changed_at');
+      logger.info('Migration: Renamed changed_by column to changed_at in hazo_prompts', {
         file: file_name,
       });
     }
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
-    logger.warn('Migration warning (may be harmless)', {
+    logger.warn('Migration warning: Could not rename changed_by to changed_at', {
       file: file_name,
       data: { error: error_message },
     });
@@ -439,15 +474,15 @@ export function close_database(logger: Logger): void {
  */
 export function insert_prompt(
   db: SqlJsDatabase,
-  prompt: Omit<PromptRecord, 'uuid' | 'created_at' | 'changed_by'>,
+  prompt: Omit<PromptRecord, 'id' | 'created_at' | 'changed_at'>,
   logger: Logger
 ): PromptRecord {
   const file_name = 'init_database.ts';
-  const uuid = randomUUID();
+  const id = randomUUID();
 
   const insert_sql = `
-    INSERT INTO prompts_library (uuid, prompt_area, prompt_key, local_1, local_2, local_3, prompt_text, prompt_variables, prompt_notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO hazo_prompts (id, prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   try {
@@ -455,22 +490,26 @@ export function insert_prompt(
       file: file_name,
       line: 282,
       data: {
-        uuid,
+        id,
         prompt_area: prompt.prompt_area,
         prompt_key: prompt.prompt_key,
         local_1: prompt.local_1,
         local_2: prompt.local_2,
         local_3: prompt.local_3,
+        user_id: prompt.user_id,
+        scope_id: prompt.scope_id,
       },
     });
 
     db.run(insert_sql, [
-      uuid,
+      id,
       prompt.prompt_area,
       prompt.prompt_key,
       prompt.local_1 || null,
       prompt.local_2 || null,
       prompt.local_3 || null,
+      prompt.user_id || null,
+      prompt.scope_id || null,
       prompt.prompt_text,
       prompt.prompt_variables,
       prompt.prompt_notes,
@@ -481,23 +520,23 @@ export function insert_prompt(
     
     // Fetch the inserted record
     const result = db.exec(
-      'SELECT * FROM prompts_library WHERE uuid = ?',
-      [uuid]
+      'SELECT * FROM hazo_prompts WHERE id = ?',
+      [id]
     );
-    
+
     if (result.length === 0 || result[0].values.length === 0) {
       throw new Error('Failed to retrieve inserted prompt');
     }
-    
+
     const row = result[0].values[0];
     const columns = result[0].columns;
-    
+
     const record = row_to_prompt_record(row, columns);
-    
+
     logger.info('Prompt inserted successfully', {
       file: file_name,
       line: 318,
-      data: { uuid, prompt_area: prompt.prompt_area, prompt_key: prompt.prompt_key },
+      data: { id, prompt_area: prompt.prompt_area, prompt_key: prompt.prompt_key },
     });
     
     return record;
@@ -515,15 +554,15 @@ export function insert_prompt(
 /**
  * Update an existing prompt in the database
  * @param db - Database instance
- * @param uuid - UUID of the prompt to update
+ * @param id - ID (UUID) of the prompt to update
  * @param updates - Fields to update
  * @param logger - Logger instance
  * @returns The updated prompt record
  */
 export function update_prompt(
   db: SqlJsDatabase,
-  uuid: string,
-  updates: Partial<Omit<PromptRecord, 'uuid' | 'created_at' | 'changed_by'>>,
+  id: string,
+  updates: Partial<Omit<PromptRecord, 'id' | 'created_at' | 'changed_at'>>,
   logger: Logger
 ): PromptRecord | null {
   const file_name = 'init_database.ts';
@@ -552,6 +591,14 @@ export function update_prompt(
     fields.push('local_3 = ?');
     values.push(updates.local_3 || null);
   }
+  if (updates.user_id !== undefined) {
+    fields.push('user_id = ?');
+    values.push(updates.user_id || null);
+  }
+  if (updates.scope_id !== undefined) {
+    fields.push('scope_id = ?');
+    values.push(updates.scope_id || null);
+  }
   if (updates.prompt_text !== undefined) {
     fields.push('prompt_text = ?');
     values.push(updates.prompt_text);
@@ -569,57 +616,57 @@ export function update_prompt(
     logger.warn('No fields to update', {
       file: file_name,
       line: 377,
-      data: { uuid },
+      data: { id },
     });
     return null;
   }
-  
-  // Add changed_by timestamp
-  fields.push("changed_by = datetime('now')");
-  values.push(uuid);
-  
+
+  // Add changed_at timestamp
+  fields.push("changed_at = datetime('now')");
+  values.push(id);
+
   const update_sql = `
-    UPDATE prompts_library 
+    UPDATE hazo_prompts
     SET ${fields.join(', ')}
-    WHERE uuid = ?
+    WHERE id = ?
   `;
-  
+
   try {
     logger.debug('Updating prompt in database', {
       file: file_name,
       line: 395,
-      data: { uuid, fields: Object.keys(updates) },
+      data: { id, fields: Object.keys(updates) },
     });
-    
+
     db.run(update_sql, values);
-    
+
     // Save changes to file
     save_database(logger);
-    
+
     // Fetch the updated record
     const result = db.exec(
-      'SELECT * FROM prompts_library WHERE uuid = ?',
-      [uuid]
+      'SELECT * FROM hazo_prompts WHERE id = ?',
+      [id]
     );
-    
+
     if (result.length === 0 || result[0].values.length === 0) {
       logger.warn('Prompt not found after update', {
         file: file_name,
         line: 412,
-        data: { uuid },
+        data: { id },
       });
       return null;
     }
-    
+
     const row = result[0].values[0];
     const columns = result[0].columns;
-    
+
     const record = row_to_prompt_record(row, columns);
-    
+
     logger.info('Prompt updated successfully', {
       file: file_name,
       line: 423,
-      data: { uuid },
+      data: { id },
     });
     
     return record;
@@ -628,7 +675,7 @@ export function update_prompt(
     logger.error('Failed to update prompt', {
       file: file_name,
       line: 431,
-      data: { error: error_message, uuid },
+      data: { error: error_message, id },
     });
     throw error;
   }
@@ -637,59 +684,59 @@ export function update_prompt(
 /**
  * Delete a prompt from the database
  * @param db - Database instance
- * @param uuid - UUID of the prompt to delete
+ * @param id - ID (UUID) of the prompt to delete
  * @param logger - Logger instance
  * @returns True if deleted successfully, false if not found
  */
 export function delete_prompt(
   db: SqlJsDatabase,
-  uuid: string,
+  id: string,
   logger: Logger
 ): boolean {
   const file_name = 'init_database.ts';
-  
-  const delete_sql = `DELETE FROM prompts_library WHERE uuid = ?`;
-  
+
+  const delete_sql = `DELETE FROM hazo_prompts WHERE id = ?`;
+
   try {
     logger.debug('Deleting prompt from database', {
       file: file_name,
       line: 475,
-      data: { uuid },
+      data: { id },
     });
-    
+
     // Check if prompt exists first
     const check_result = db.exec(
-      'SELECT uuid FROM prompts_library WHERE uuid = ?',
-      [uuid]
+      'SELECT id FROM hazo_prompts WHERE id = ?',
+      [id]
     );
-    
+
     if (check_result.length === 0 || check_result[0].values.length === 0) {
       logger.warn('Prompt not found for deletion', {
         file: file_name,
         line: 485,
-        data: { uuid },
+        data: { id },
       });
       return false;
     }
-    
-    db.run(delete_sql, [uuid]);
-    
+
+    db.run(delete_sql, [id]);
+
     // Save changes to file
     save_database(logger);
-    
+
     logger.info('Prompt deleted successfully', {
       file: file_name,
       line: 495,
-      data: { uuid },
+      data: { id },
     });
-    
+
     return true;
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to delete prompt', {
       file: file_name,
       line: 502,
-      data: { error: error_message, uuid },
+      data: { error: error_message, id },
     });
     throw error;
   }

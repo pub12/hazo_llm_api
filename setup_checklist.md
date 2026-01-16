@@ -317,12 +317,68 @@ your-project/
 
 ---
 
+## Using Bulk Operations (Test App)
+
+The test application provides bulk operations for managing prompts efficiently.
+
+### Bulk Export
+
+1. Navigate to `/prompt-config` page
+2. Select prompts using checkboxes (individual or select all)
+3. Click "Export" button (Download icon)
+4. JSON file downloads with format: `prompts_export_YYYY-MM-DD.json`
+
+**Export Format:**
+```json
+{
+  "version": "1.0",
+  "exported_at": "2024-01-15T10:30:00.000Z",
+  "prompts": [
+    {
+      "prompt_area": "marketing",
+      "prompt_key": "greeting",
+      "prompt_text": "Hello {{name}}",
+      "prompt_variables": [
+        { "name": "name", "description": "Customer name" }
+      ],
+      "prompt_notes": "Standard greeting"
+    }
+  ]
+}
+```
+
+### Bulk Import
+
+1. Navigate to `/prompt-config` page
+2. Click "Import" button (Upload icon)
+3. Select a JSON file matching the export format
+4. Prompts are validated and imported automatically
+5. View success message with import count or error details
+
+**Import Validation:**
+- Required fields: `prompt_area`, `prompt_key`, `prompt_text`
+- Optional fields: `local_1`, `local_2`, `local_3`, `user_id`, `scope_id`, `prompt_variables`, `prompt_notes`
+- Invalid prompts are skipped with error messages
+
+### Bulk Delete
+
+1. Navigate to `/prompt-config` page
+2. Select prompts using checkboxes
+3. Click "Delete Selected" button
+4. Confirm deletion in dialog
+5. Selected prompts are permanently removed
+
+**Note:** Bulk delete cannot be undone. Always export prompts before bulk deletion for backup.
+
+---
+
 ## Next Steps
 
 - [ ] Review `techdoc.md` for full API documentation
 - [ ] Set up prompt templates in the database
 - [ ] Configure generation parameters for your use case
 - [ ] Implement error handling and logging
+- [ ] Test bulk import/export for backup and migration workflows
 
 ---
 

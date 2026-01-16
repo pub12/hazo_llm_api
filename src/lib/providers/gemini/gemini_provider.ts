@@ -15,6 +15,7 @@ import type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   LLMResponse,
   Logger,
   Base64Data,
@@ -52,7 +53,10 @@ export interface GeminiProviderConfig {
   
   /** Model for image_image service */
   model_image_image?: string;
-  
+
+  /** Model for document_text service (PDF analysis) */
+  model_document_text?: string;
+
   /** Generation config for text API calls */
   text_config?: GeminiGenerationConfig;
   
@@ -83,6 +87,7 @@ export class GeminiProvider implements LLMProvider {
   private readonly model_image_text: string | undefined;
   private readonly model_text_image: string | undefined;
   private readonly model_image_image: string | undefined;
+  private readonly model_document_text: string | undefined;
   private readonly text_config: GeminiGenerationConfig | undefined;
   private readonly image_config: GeminiGenerationConfig | undefined;
   private readonly capabilities: LLMCapabilities;
@@ -100,6 +105,7 @@ export class GeminiProvider implements LLMProvider {
     this.model_image_text = config.model_image_text;
     this.model_text_image = config.model_text_image;
     this.model_image_image = config.model_image_image;
+    this.model_document_text = config.model_document_text;
     this.text_config = config.text_config;
     this.image_config = config.image_config;
     this.logger = config.logger;
@@ -114,6 +120,7 @@ export class GeminiProvider implements LLMProvider {
         SERVICE_TYPES.IMAGE_TEXT,
         SERVICE_TYPES.TEXT_IMAGE,
         SERVICE_TYPES.IMAGE_IMAGE,
+        SERVICE_TYPES.DOCUMENT_TEXT,
       ]);
     }
   }
@@ -149,6 +156,8 @@ export class GeminiProvider implements LLMProvider {
         return this.model_text_image;
       case SERVICE_TYPES.IMAGE_IMAGE:
         return this.model_image_image;
+      case SERVICE_TYPES.DOCUMENT_TEXT:
+        return this.model_document_text;
       default:
         return undefined;
     }
@@ -558,6 +567,59 @@ export class GeminiProvider implements LLMProvider {
       });
       return { success: false, error: error_message };
     }
+  }
+
+  /**
+   * Document input → Text output
+   * Analyze a document (PDF) and generate text description
+   *
+   * Gemini supports PDF natively via the same multimodal format as images.
+   * PDFs are passed as inline_data with application/pdf MIME type.
+   *
+   * @param params - Document input parameters
+   * @param logger - Logger instance
+   * @returns LLM response with generated text
+   */
+  async document_text(params: DocumentTextParams, logger: Logger): Promise<LLMResponse> {
+    const file_name = 'gemini_provider.ts';
+
+    if (!params.document_b64 || !params.document_mime_type) {
+      return {
+        success: false,
+        error: 'document_b64 and document_mime_type are required',
+      };
+    }
+
+    // Gemini supports PDF natively with the same format as images
+    const document_data: Base64Data[] = [{
+      mime_type: params.document_mime_type,
+      data: params.document_b64,
+    }];
+
+    // Use per-service model if configured, otherwise fall back to image_text model or default
+    const model = this.model_document_text || this.model_image_text;
+    const api_url = model ? get_gemini_api_url(model) : this.api_url;
+
+    logger.debug('Gemini provider: document_text', {
+      file: file_name,
+      data: {
+        prompt_length: params.prompt.length,
+        document_mime_type: params.document_mime_type,
+        max_pages: params.max_pages,
+        model: model || 'default (from api_url)',
+        api_url,
+      },
+    });
+
+    // Use the same call_gemini_api function - Gemini handles PDFs as multimodal input
+    return await call_gemini_api(
+      api_url,
+      this.api_key,
+      params.prompt,
+      document_data,
+      logger,
+      this.image_config  // Use same config as image analysis
+    );
   }
 }
 

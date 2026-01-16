@@ -12,6 +12,7 @@ import type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   Logger,
 } from '../llm_api/types.js';
 
@@ -65,6 +66,7 @@ export const SERVICE_TYPES = {
   IMAGE_TEXT: 'image_text',
   TEXT_IMAGE: 'text_image',
   IMAGE_IMAGE: 'image_image',
+  DOCUMENT_TEXT: 'document_text',
 } as const;
 
 /**
@@ -143,6 +145,16 @@ export interface LLMProvider {
    * @returns LLM response with transformed image
    */
   image_image(params: ImageImageParams, logger: Logger): Promise<LLMResponse>;
+
+  /**
+   * Document input → Text output
+   * Analyze a document (PDF) and generate text description
+   *
+   * @param params - Document input parameters
+   * @param logger - Logger instance
+   * @returns LLM response with generated text
+   */
+  document_text(params: DocumentTextParams, logger: Logger): Promise<LLMResponse>;
 
   // =========================================================================
   // Streaming Methods (Optional)

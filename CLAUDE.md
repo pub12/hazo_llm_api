@@ -75,6 +75,33 @@ When modifying service functions or adding providers, use these helpers:
 - **Logging**: Use helpers from `provider_helper.ts` (no hardcoded line numbers)
 - **UI**: Shadcn Alert Dialog for acknowledgment, Sonner for notifications
 
+## Test App UI Features
+
+### Prompt Configuration Page (`/prompt-config`)
+
+**Bulk Operations:**
+- **Selection**: Checkbox on each row, Select All checkbox in header
+- **Export**: Download selected prompts as JSON (format: `prompts_export_YYYY-MM-DD.json`)
+- **Import**: Upload JSON file to bulk import prompts with validation
+- **Delete**: Bulk delete selected prompts with confirmation dialog
+
+**Components Used:**
+- `checkbox.tsx` - Row selection (individual + select all)
+- `tooltip.tsx` - Format hints on Export/Import buttons
+- `dialog.tsx` - Create/edit/confirm dialogs
+- `button.tsx`, `input.tsx`, `textarea.tsx` - Form controls
+
+**State Management:**
+- `selected_ids: Set<string>` - Currently selected prompt UUIDs
+- `bulk_deleting: boolean` - Loading state for bulk delete
+- `importing: boolean` - Loading state for import operation
+
+**API Endpoints:**
+- `POST /api/prompts/bulk` - Import prompts from JSON array
+- `DELETE /api/prompts/bulk` - Delete prompts by UUID array
+
+See `test-app/app/api/prompts/bulk/route.ts` for implementation details.
+
 ## Adding a New LLM Provider
 
 ### Quick Steps

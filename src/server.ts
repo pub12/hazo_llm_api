@@ -11,6 +11,7 @@
  * - hazo_llm_image_text: Image input → Text output
  * - hazo_llm_text_image: Text input → Image output
  * - hazo_llm_image_image: Image input → Image output
+ * - hazo_llm_document_text: Document input → Text output (PDF analysis)
  * - hazo_llm_text_image_text: Text → Image → Text (chained)
  * - hazo_llm_prompt_chain: Chain multiple prompts with dynamic value resolution
  */
@@ -24,6 +25,7 @@ export {
   hazo_llm_image_text,
   hazo_llm_text_image,
   hazo_llm_image_image,
+  hazo_llm_document_text,
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
   hazo_llm_prompt_chain,
@@ -65,7 +67,7 @@ export {
   get_prompt_by_area_key_and_locals,
   get_prompt_text,
   get_prompts_by_area,
-  get_prompt_by_uuid,
+  get_prompt_by_id,
   get_all_prompts,
   substitute_variables,
   parse_prompt_variables,
@@ -105,6 +107,7 @@ export type {
   ImageTextParams,
   TextImageParams,
   ImageImageParams,
+  DocumentTextParams,
   TextImageTextParams,
   ImageImageTextParams,
   ChainImage,

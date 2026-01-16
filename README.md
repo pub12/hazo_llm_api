@@ -439,6 +439,130 @@ const response = await hazo_llm_text_text({
 });
 ```
 
+### Prompt Import/Export Format
+
+The test application supports bulk import/export of prompts via JSON files. This enables backup, migration, and sharing of prompt libraries.
+
+#### Export Format
+
+When exporting prompts, the JSON file follows this structure:
+
+```json
+{
+  "version": "1.0",
+  "exported_at": "2024-01-15T10:30:00.000Z",
+  "prompts": [
+    {
+      "prompt_area": "marketing",
+      "prompt_key": "greeting",
+      "local_1": null,
+      "local_2": null,
+      "local_3": null,
+      "user_id": null,
+      "scope_id": null,
+      "prompt_text": "Hello {{name}}, welcome to {{service}}.",
+      "prompt_variables": [
+        { "name": "name", "description": "Customer name" },
+        { "name": "service", "description": "Service name" }
+      ],
+      "prompt_notes": "Standard greeting for marketing emails"
+    }
+  ]
+}
+```
+
+#### Required Fields for Import
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `prompt_area` | string | Yes | Category/area for the prompt |
+| `prompt_key` | string | Yes | Unique key within the area |
+| `prompt_text` | string | Yes | The prompt template text |
+| `local_1` | string \| null | No | Local filter 1 (e.g., region) |
+| `local_2` | string \| null | No | Local filter 2 (e.g., department) |
+| `local_3` | string \| null | No | Local filter 3 (e.g., sub-category) |
+| `user_id` | string \| null | No | User-specific identifier |
+| `scope_id` | string \| null | No | Scope-specific identifier |
+| `prompt_variables` | array | No | Array of `{ name, description }` objects |
+| `prompt_notes` | string | No | Documentation/notes for the prompt |
+
+#### Import Behavior
+
+- Each imported prompt receives a new UUID automatically
+- `created_at` is set to the import timestamp
+- `changed_at` is set to the import timestamp
+- Duplicate `prompt_area`/`prompt_key` combinations create new entries (no automatic deduplication)
+- Invalid prompts (missing required fields) are skipped with errors reported
+
+#### Bulk Operations UI
+
+The test application's Prompt Configuration page (`/prompt-config`) provides a user interface for bulk operations:
+
+**Selection:**
+- Individual row selection via checkbox
+- Select all/deselect all checkbox in table header
+- Visual indication of selected rows
+
+**Export:**
+1. Select one or more prompts using checkboxes
+2. Click "Export" button (Download icon)
+3. JSON file downloads automatically with filename: `prompts_export_YYYY-MM-DD.json`
+
+**Import:**
+1. Click "Import" button (Upload icon)
+2. Select a JSON file matching the export format
+3. Prompts are validated and imported automatically
+4. Success/error messages display import results
+
+**Delete:**
+1. Select one or more prompts using checkboxes
+2. Click "Delete Selected" button
+3. Confirm deletion in dialog
+4. Selected prompts are removed permanently
+
+#### API Endpoints
+
+The test application provides bulk operation endpoints:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/prompts/bulk` | Import prompts from JSON |
+| `DELETE` | `/api/prompts/bulk` | Delete multiple prompts by ID |
+
+**Import Request:**
+```json
+{
+  "prompts": [
+    { "prompt_area": "...", "prompt_key": "...", "prompt_text": "..." }
+  ]
+}
+```
+
+**Import Response:**
+```json
+{
+  "success": true,
+  "imported_count": 5,
+  "errors": ["Optional array of error messages for failed imports"]
+}
+```
+
+**Delete Request:**
+```json
+{
+  "ids": ["uuid-1", "uuid-2", "uuid-3"]
+}
+```
+
+**Delete Response:**
+```json
+{
+  "success": true,
+  "deleted_count": 3,
+  "errors": ["Optional array of error messages for failed deletions"]
+}
+```
+
 ## Server-Side Only
 
 **Important**: All LLM API functions must be used server-side only.

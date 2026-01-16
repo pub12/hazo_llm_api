@@ -132,7 +132,7 @@ export function PromptLibrarySelector({
   }, [prompts, selected_area]);
 
   const selected_prompt = useMemo(() => {
-    return prompts.find(p => p.uuid === selected_prompt_id);
+    return prompts.find(p => p.id === selected_prompt_id);
   }, [prompts, selected_prompt_id]);
 
   // Parse prompt variables from JSON string
@@ -295,7 +295,7 @@ export function PromptLibrarySelector({
                     </SelectTrigger>
                     <SelectContent>
                       {filtered_prompts.map(p => (
-                        <SelectItem key={p.uuid} value={p.uuid}>{p.prompt_key}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.prompt_key}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

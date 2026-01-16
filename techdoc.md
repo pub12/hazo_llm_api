@@ -176,6 +176,25 @@ TailwindCSS with Shadcn/UI theming:
 - Responsive design
 - Client-side navigation
 
+### Shadcn/UI Components (Test App)
+
+**Location**: `test-app/components/ui/`
+
+The test application uses the following shadcn/ui components:
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| `dialog.tsx` | Modal dialogs for create/edit forms | `components/ui/dialog.tsx` |
+| `button.tsx` | Styled button with variants | `components/ui/button.tsx` |
+| `input.tsx` | Form input fields | `components/ui/input.tsx` |
+| `textarea.tsx` | Multi-line text input | `components/ui/textarea.tsx` |
+| `checkbox.tsx` | Checkbox for row selection | `components/ui/checkbox.tsx` |
+| `tooltip.tsx` | Tooltips for UI hints | `components/ui/tooltip.tsx` |
+
+**Recent Additions (Bulk Operations)**:
+- `checkbox.tsx` - Used for individual and select-all row selection in prompts table
+- `tooltip.tsx` - Used for showing JSON format examples on Export/Import buttons
+
 ## Configuration System
 
 ### Configuration File
@@ -847,6 +866,168 @@ console.log(`Cache size: ${stats.size}/${stats.max_size}`);
 - Max Size: 100 entries
 - Enabled: true
 
+## Bulk Operations API (Test App)
+
+The test application provides API endpoints for bulk prompt operations, enabling efficient management of multiple prompts.
+
+### API Routes
+
+**Location**: `test-app/app/api/prompts/bulk/route.ts`
+
+### Bulk Import Endpoint
+
+**Method**: `POST /api/prompts/bulk`
+
+**Purpose**: Import multiple prompts from JSON format.
+
+**Request Body**:
+```typescript
+{
+  prompts: Array<{
+    prompt_area: string;           // Required
+    prompt_key: string;            // Required
+    prompt_text: string;           // Required
+    local_1?: string | null;
+    local_2?: string | null;
+    local_3?: string | null;
+    user_id?: string | null;
+    scope_id?: string | null;
+    prompt_variables?: Array<{
+      name: string;
+      description: string;
+    }>;
+    prompt_notes?: string;
+  }>;
+}
+```
+
+**Response**:
+```typescript
+{
+  success: boolean;
+  imported_count: number;
+  errors?: string[];  // Optional array of error messages
+}
+```
+
+**Validation**:
+- Each prompt must have `prompt_area`, `prompt_key`, and `prompt_text`
+- Invalid prompts are skipped and reported in errors array
+- Each imported prompt receives a new UUID
+- Timestamps (`created_at`, `changed_at`) are set to import time
+
+**Example**:
+```typescript
+const response = await fetch('/api/prompts/bulk', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    prompts: [
+      {
+        prompt_area: 'marketing',
+        prompt_key: 'greeting',
+        prompt_text: 'Hello {{name}}',
+        prompt_variables: [
+          { name: 'name', description: 'Customer name' }
+        ],
+        prompt_notes: 'Standard greeting'
+      }
+    ]
+  })
+});
+```
+
+### Bulk Delete Endpoint
+
+**Method**: `DELETE /api/prompts/bulk`
+
+**Purpose**: Delete multiple prompts by their UUIDs.
+
+**Request Body**:
+```typescript
+{
+  ids: string[];  // Array of prompt UUIDs to delete
+}
+```
+
+**Response**:
+```typescript
+{
+  success: boolean;
+  deleted_count: number;
+  errors?: string[];  // Optional array of error messages
+}
+```
+
+**Validation**:
+- Must provide at least one ID
+- Non-existent IDs are reported in errors array
+- Deletion is permanent and cannot be undone
+
+**Example**:
+```typescript
+const response = await fetch('/api/prompts/bulk', {
+  method: 'DELETE',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    ids: ['uuid-1', 'uuid-2', 'uuid-3']
+  })
+});
+```
+
+### Export Format
+
+The export functionality is client-side only and generates JSON in the following format:
+
+```typescript
+interface ExportFormat {
+  version: string;           // "1.0"
+  exported_at: string;       // ISO timestamp
+  prompts: Array<{
+    prompt_area: string;
+    prompt_key: string;
+    local_1: string | null;
+    local_2: string | null;
+    local_3: string | null;
+    user_id: string | null;
+    scope_id: string | null;
+    prompt_text: string;
+    prompt_variables: Array<{
+      name: string;
+      description: string;
+    }>;
+    prompt_notes: string;
+  }>;
+}
+```
+
+**Download Filename Format**: `prompts_export_YYYY-MM-DD.json`
+
+### UI Integration
+
+**Location**: `test-app/app/prompt-config/page.tsx`
+
+**Features**:
+- Checkbox selection (individual rows and select all)
+- Export button with Download icon and tooltip
+- Import button with Upload icon and tooltip
+- Delete Selected button (appears when items are selected)
+- Visual feedback during operations (loading states)
+- Error and success message display
+
+**State Management**:
+```typescript
+const [selected_ids, set_selected_ids] = useState<Set<string>>(new Set());
+const [bulk_deleting, set_bulk_deleting] = useState(false);
+const [importing, set_importing] = useState(false);
+```
+
+**Selection Logic**:
+- Individual selection: Click checkbox on row
+- Select all: Click checkbox in table header
+- Indeterminate state when some (but not all) rows selected
+- Selection persists across table operations
+
 ## Future Considerations
 
 - Additional LLM providers (Anthropic, Cohere, etc.)
@@ -854,4 +1035,7 @@ console.log(`Cache size: ${stats.size}/${stats.max_size}`);
 - Rate limiting and retry logic
 - Response caching
 - Testing infrastructure
+- Bulk operations with conflict resolution (update vs. create)
+- Import preview mode before committing changes
+- Undo functionality for bulk operations
 

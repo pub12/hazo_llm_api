@@ -52,7 +52,7 @@ export {
   get_prompt_by_area_and_key,
   get_prompt_text,
   get_prompts_by_area,
-  get_prompt_by_uuid,
+  get_prompt_by_id,
   substitute_variables,
   parse_prompt_variables,
   validate_variables,
