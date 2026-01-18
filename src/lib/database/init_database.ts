@@ -275,6 +275,9 @@ function create_prompts_table(db: SqlJsDatabase, logger: Logger): void {
     // Migrate: rename changed_by to changed_at for existing databases
     migrate_rename_changed_by_to_changed_at(db, logger);
 
+    // Migrate: add next_prompt column for dynamic chaining
+    migrate_add_next_prompt_column(db, logger);
+
     // Create index for faster lookups by prompt_area, prompt_key, and filters
     const create_index_sql = `
       CREATE INDEX IF NOT EXISTS idx_prompts_area_key
@@ -370,6 +373,40 @@ function migrate_rename_changed_by_to_changed_at(db: SqlJsDatabase, logger: Logg
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
     logger.warn('Migration warning: Could not rename changed_by to changed_at', {
+      file: file_name,
+      data: { error: error_message },
+    });
+  }
+}
+
+/**
+ * Migrate existing database: add next_prompt column if it doesn't exist
+ * This column stores JSON configuration for dynamic prompt chaining
+ * @param db - Database instance
+ * @param logger - Logger instance
+ */
+function migrate_add_next_prompt_column(db: SqlJsDatabase, logger: Logger): void {
+  const file_name = 'init_database.ts';
+
+  try {
+    // Check existing columns
+    const table_info = db.exec("PRAGMA table_info(hazo_prompts)");
+    if (table_info.length === 0) {
+      return; // Table doesn't exist yet
+    }
+
+    const existing_columns = table_info[0].values.map(row => row[1] as string);
+
+    // Add next_prompt column if it doesn't exist
+    if (!existing_columns.includes('next_prompt')) {
+      db.run('ALTER TABLE hazo_prompts ADD COLUMN next_prompt TEXT DEFAULT NULL');
+      logger.info('Migration: Added next_prompt column to hazo_prompts', {
+        file: file_name,
+      });
+    }
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error);
+    logger.warn('Migration warning: Could not add next_prompt column', {
       file: file_name,
       data: { error: error_message },
     });
@@ -481,8 +518,8 @@ export function insert_prompt(
   const id = randomUUID();
 
   const insert_sql = `
-    INSERT INTO hazo_prompts (id, prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO hazo_prompts (id, prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes, next_prompt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   try {
@@ -513,6 +550,7 @@ export function insert_prompt(
       prompt.prompt_text,
       prompt.prompt_variables,
       prompt.prompt_notes,
+      prompt.next_prompt || null,
     ]);
     
     // Save changes to file
@@ -611,7 +649,11 @@ export function update_prompt(
     fields.push('prompt_notes = ?');
     values.push(updates.prompt_notes);
   }
-  
+  if (updates.next_prompt !== undefined) {
+    fields.push('next_prompt = ?');
+    values.push(updates.next_prompt || null);
+  }
+
   if (fields.length === 0) {
     logger.warn('No fields to update', {
       file: file_name,

@@ -323,6 +323,9 @@ export interface PromptRecord {
 
   /** Timestamp when the record was last changed */
   changed_at: string;
+
+  /** JSON configuration for dynamic prompt chaining (NextPromptConfig) */
+  next_prompt: string | null;
 }
 
 // =============================================================================
@@ -735,6 +738,9 @@ export interface LLMApiClient {
 
   /** Execute a chain of prompts with dynamic value resolution */
   hazo_llm_prompt_chain: (params: PromptChainParams, llm?: ProviderName) => Promise<PromptChainResponse>;
+
+  /** Execute a dynamic chain where next prompt is determined by JSON output */
+  hazo_llm_dynamic_data_extract: (params: DynamicDataExtractParams, llm?: ProviderName) => Promise<DynamicDataExtractResponse>;
 }
 
 // =============================================================================
@@ -893,5 +899,204 @@ export interface PromptChainResponse {
 
   /** Number of successful calls */
   successful_calls: number;
+}
+
+// =============================================================================
+// Dynamic Data Extract Types
+// =============================================================================
+
+/**
+ * Comparison operator for conditional branching
+ */
+export type NextPromptOperator = '==' | '!=' | '>' | '<' | '>=' | '<=' | 'contains' | 'startsWith' | 'endsWith';
+
+/**
+ * Condition for branching logic in next_prompt configuration
+ */
+export interface NextPromptCondition {
+  /** JSONPath to check (e.g., "$.amount", "$.document_type") */
+  field: string;
+
+  /** Comparison operator */
+  operator: NextPromptOperator;
+
+  /** Value to compare against */
+  value: string | number | boolean;
+}
+
+/**
+ * Single branch definition for conditional routing
+ */
+export interface NextPromptBranch {
+  /** All conditions must match (AND logic) */
+  conditions?: NextPromptCondition[];
+
+  /** Static prompt area value */
+  static_prompt_area?: string;
+
+  /** Static prompt key value */
+  static_prompt_key?: string;
+
+  /** JSONPath to extract prompt area from LLM output */
+  dynamic_prompt_area?: string;
+
+  /** JSONPath to extract prompt key from LLM output */
+  dynamic_prompt_key?: string;
+}
+
+/**
+ * Configuration for dynamic prompt chaining stored in next_prompt database field
+ *
+ * Supports two modes:
+ * 1. Simple mode (no branching): Direct static/dynamic values
+ * 2. Conditional branching: Evaluate branches in order, use first match
+ *
+ * @example Simple mode
+ * ```json
+ * {
+ *   "static_prompt_area": "doc",
+ *   "dynamic_prompt_key": "$.document_type"
+ * }
+ * ```
+ *
+ * @example Conditional branching
+ * ```json
+ * {
+ *   "branches": [
+ *     {
+ *       "conditions": [{ "field": "$.total", "operator": ">", "value": 1000 }],
+ *       "static_prompt_area": "doc",
+ *       "static_prompt_key": "high_value"
+ *     }
+ *   ],
+ *   "default_branch": {
+ *     "static_prompt_area": "doc",
+ *     "dynamic_prompt_key": "$.document_type"
+ *   }
+ * }
+ * ```
+ */
+export interface NextPromptConfig {
+  /** Static prompt area value (simple mode) */
+  static_prompt_area?: string;
+
+  /** Static prompt key value (simple mode) */
+  static_prompt_key?: string;
+
+  /** JSONPath to extract prompt area from LLM output (simple mode) */
+  dynamic_prompt_area?: string;
+
+  /** JSONPath to extract prompt key from LLM output (simple mode) */
+  dynamic_prompt_key?: string;
+
+  /** Conditional branches evaluated in order (first match wins) */
+  branches?: NextPromptBranch[];
+
+  /** Fallback branch used if no branch matches */
+  default_branch?: NextPromptBranch;
+}
+
+/**
+ * Parameters for hazo_llm_dynamic_data_extract function
+ */
+export interface DynamicDataExtractParams {
+  /** Area of the initial prompt to start the chain */
+  initial_prompt_area: string;
+
+  /** Key of the initial prompt to start the chain */
+  initial_prompt_key: string;
+
+  /** Variables to substitute in the initial prompt */
+  initial_prompt_variables?: PromptVariables;
+
+  /** Base64 encoded image for image_text first call */
+  image_b64?: string;
+
+  /** MIME type for the image */
+  image_mime_type?: string;
+
+  /** Maximum depth of the chain (default: 10) */
+  max_depth?: number;
+
+  /** Continue on error (default: false - fail fast) */
+  continue_on_error?: boolean;
+
+  /** Additional context data available for variable substitution */
+  context_data?: Record<string, unknown>;
+}
+
+/**
+ * Result of a single step in the dynamic extract chain
+ */
+export interface DynamicExtractStepResult {
+  /** Step index (0-based) */
+  step_index: number;
+
+  /** Whether this step succeeded */
+  success: boolean;
+
+  /** Prompt area used for this step */
+  prompt_area: string;
+
+  /** Prompt key used for this step */
+  prompt_key: string;
+
+  /** Raw text response from LLM */
+  raw_text?: string;
+
+  /** Parsed JSON result (if LLM returned valid JSON) */
+  parsed_result?: Record<string, unknown>;
+
+  /** Error message if step failed */
+  error?: string;
+
+  /** How next_prompt was resolved (for debugging) */
+  next_prompt_resolution?: {
+    /** The next_prompt config from the prompt */
+    config: NextPromptConfig | null;
+    /** Resolved prompt_area */
+    resolved_area?: string;
+    /** Resolved prompt_key */
+    resolved_key?: string;
+    /** Which branch matched (if using branching) */
+    matched_branch?: 'branch' | 'default' | 'simple';
+    /** Branch index if matched a branch */
+    branch_index?: number;
+  };
+}
+
+/**
+ * Stop reason for the dynamic extract chain
+ */
+export type DynamicExtractStopReason =
+  | 'no_next_prompt'      // Prompt has no next_prompt configured
+  | 'max_depth'           // Reached max_depth limit
+  | 'error'               // An error occurred
+  | 'next_prompt_not_found'; // Resolved next prompt doesn't exist in database
+
+/**
+ * Response from hazo_llm_dynamic_data_extract function
+ */
+export interface DynamicDataExtractResponse {
+  /** Overall success (true if chain completed without fatal errors) */
+  success: boolean;
+
+  /** Deep-merged result object from all successful steps */
+  merged_result: Record<string, unknown>;
+
+  /** Individual results for each step */
+  step_results: DynamicExtractStepResult[];
+
+  /** Array of errors encountered */
+  errors: Array<{ step_index: number; error: string }>;
+
+  /** Total number of steps executed */
+  total_steps: number;
+
+  /** Number of successful steps */
+  successful_steps: number;
+
+  /** Reason why the chain stopped */
+  final_stop_reason: DynamicExtractStopReason;
 }
 

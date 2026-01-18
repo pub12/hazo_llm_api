@@ -14,10 +14,10 @@ import {
   get_database,
   initialize_llm_api
 } from 'hazo_llm_api/server';
-import type { Logger } from 'hazo_llm_api';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
+import { logger } from '@/lib/logger';
 
 // =============================================================================
 // Config Reader
@@ -55,17 +55,6 @@ function get_app_config(): AppConfig {
 }
 
 // =============================================================================
-// Logger
-// =============================================================================
-
-const test_logger: Logger = {
-  error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-  info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-  warn: (msg, meta) => console.warn(`[WARN] ${msg}`, meta),
-  debug: (msg, meta) => console.debug(`[DEBUG] ${msg}`, meta),
-};
-
-// =============================================================================
 // Initialize LLM API (if not already initialized)
 // =============================================================================
 
@@ -81,11 +70,11 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        logger: test_logger,
+        logger: logger,
         sqlite_path: app_config.sqlite_path,
       });
     } catch (error) {
-      test_logger.error('Failed to initialize LLM API', {
+      logger.error('Failed to initialize LLM API', {
         file: 'prompts/[uuid]/route.ts',
         line: 85,
         data: { error: error instanceof Error ? error.message : String(error) },
@@ -124,7 +113,7 @@ export async function GET(
       );
     }
     
-    const prompt = get_prompt_by_id(db, uuid, test_logger);
+    const prompt = get_prompt_by_id(db, uuid, logger);
     
     if (!prompt) {
       return NextResponse.json(
@@ -171,7 +160,7 @@ export async function PUT(
     }
     
     const body = await request.json();
-    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes } = body;
+    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes, next_prompt } = body;
 
     const updates: Record<string, string | null> = {};
     if (prompt_area !== undefined) updates.prompt_area = prompt_area;
@@ -184,6 +173,7 @@ export async function PUT(
     if (prompt_text !== undefined) updates.prompt_text = prompt_text;
     if (prompt_variables !== undefined) updates.prompt_variables = prompt_variables;
     if (prompt_notes !== undefined) updates.prompt_notes = prompt_notes;
+    if (next_prompt !== undefined) updates.next_prompt = next_prompt || null;
     
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -192,7 +182,7 @@ export async function PUT(
       );
     }
     
-    const updated_prompt = update_prompt(db, uuid, updates, test_logger);
+    const updated_prompt = update_prompt(db, uuid, updates, logger);
     
     if (!updated_prompt) {
       return NextResponse.json(
@@ -238,7 +228,7 @@ export async function DELETE(
       );
     }
     
-    const deleted = delete_prompt(db, uuid, test_logger);
+    const deleted = delete_prompt(db, uuid, logger);
     
     if (!deleted) {
       return NextResponse.json(

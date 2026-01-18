@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Layout } from 'hazo_llm_api';
 import type { PromptRecord } from 'hazo_llm_api';
 import { Sidebar } from '@/components/sidebar';
-import { Settings, Plus, Pencil, Trash2, Loader2, CheckCircle, XCircle, Download, Upload } from 'lucide-react';
+import { Settings, Plus, Pencil, Trash2, Loader2, CheckCircle, XCircle, Download, Upload, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,7 @@ interface FormData {
   prompt_text: string;
   prompt_variables: PromptVariable[];
   prompt_notes: string;
+  next_prompt: string;
 }
 
 const empty_form_data: FormData = {
@@ -64,6 +65,7 @@ const empty_form_data: FormData = {
   prompt_text: '',
   prompt_variables: [],
   prompt_notes: '',
+  next_prompt: '',
 };
 
 // =============================================================================
@@ -138,6 +140,9 @@ export default function PromptConfigPage() {
   const [bulk_deleting, set_bulk_deleting] = useState(false);
   const [importing, set_importing] = useState(false);
 
+  // Next prompt section state
+  const [next_prompt_expanded, set_next_prompt_expanded] = useState(false);
+
   // ==========================================================================
   // Fetch Prompts
   // ==========================================================================
@@ -195,6 +200,7 @@ export default function PromptConfigPage() {
       prompt_text: prompt.prompt_text,
       prompt_variables: variables,
       prompt_notes: prompt.prompt_notes,
+      next_prompt: prompt.next_prompt || '',
     });
     set_dialog_mode('edit');
     set_editing_uuid(prompt.id);
@@ -266,6 +272,7 @@ export default function PromptConfigPage() {
         prompt_text: form_data.prompt_text,
         prompt_variables: JSON.stringify(form_data.prompt_variables.filter(v => v.name.trim())),
         prompt_notes: form_data.prompt_notes,
+        next_prompt: form_data.next_prompt.trim() || null,
       };
 
       let res: Response;
@@ -398,6 +405,7 @@ export default function PromptConfigPage() {
           prompt_text: p.prompt_text,
           prompt_variables: variables,
           prompt_notes: p.prompt_notes,
+          next_prompt: p.next_prompt,
         };
       });
 
@@ -829,6 +837,62 @@ export default function PromptConfigPage() {
                   onChange={(e) => handle_field_change('prompt_notes', e.target.value)}
                   rows={2}
                 />
+              </div>
+
+              {/* Next Prompt Configuration (Collapsible) */}
+              <div className="cls_field_next_prompt space-y-2 border rounded-lg p-3">
+                <button
+                  type="button"
+                  onClick={() => set_next_prompt_expanded(!next_prompt_expanded)}
+                  className="flex items-center gap-2 text-sm font-medium w-full text-left"
+                >
+                  {next_prompt_expanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  Next Prompt Configuration
+                  {form_data.next_prompt && (
+                    <span className="text-xs text-primary ml-2">(configured)</span>
+                  )}
+                </button>
+                {next_prompt_expanded && (
+                  <div className="pt-2 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      JSON configuration for dynamic prompt chaining. Define how the next prompt should be determined based on this prompt&apos;s output.
+                    </p>
+                    <Textarea
+                      className="cls_next_prompt_input font-mono text-xs"
+                      placeholder={`{
+  "static_prompt_area": "doc",
+  "dynamic_prompt_key": "$.document_type"
+}`}
+                      value={form_data.next_prompt}
+                      onChange={(e) => handle_field_change('next_prompt', e.target.value)}
+                      rows={6}
+                    />
+                    <details className="text-xs text-muted-foreground">
+                      <summary className="cursor-pointer hover:text-foreground">JSONPath Examples</summary>
+                      <div className="mt-2 p-2 bg-muted rounded space-y-2">
+                        <p><strong>Simple:</strong> <code className="bg-background px-1 rounded">{`{"static_prompt_area": "doc", "dynamic_prompt_key": "$.type"}`}</code></p>
+                        <p><strong>Branching:</strong></p>
+                        <pre className="bg-background p-2 rounded overflow-x-auto text-xs">{`{
+  "branches": [
+    {
+      "conditions": [{"field": "$.amount", "operator": ">", "value": 1000}],
+      "static_prompt_area": "doc",
+      "static_prompt_key": "high_value"
+    }
+  ],
+  "default_branch": {
+    "static_prompt_area": "doc",
+    "dynamic_prompt_key": "$.document_type"
+  }
+}`}</pre>
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
             </div>
 

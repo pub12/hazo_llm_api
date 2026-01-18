@@ -29,6 +29,8 @@ import type {
   ImageImageTextParams,
   PromptChainParams,
   PromptChainResponse,
+  DynamicDataExtractParams,
+  DynamicDataExtractResponse,
   Logger,
   GeminiGenerationConfig,
 } from './types.js';
@@ -42,6 +44,7 @@ import { hazo_llm_text_image_text as hazo_llm_text_image_text_internal } from '.
 import { hazo_llm_image_image_text as hazo_llm_image_image_text_internal } from './hazo_llm_image_image_text.js';
 import { hazo_llm_prompt_chain as hazo_llm_prompt_chain_internal } from './hazo_llm_prompt_chain.js';
 import { hazo_llm_document_text as hazo_llm_document_text_internal } from './hazo_llm_document_text.js';
+import { hazo_llm_dynamic_data_extract as hazo_llm_dynamic_data_extract_internal } from './hazo_llm_dynamic_data_extract.js';
 import { get_gemini_api_url } from '../providers/gemini/gemini_client.js';
 import {
   register_provider,
@@ -993,6 +996,9 @@ export async function initialize_llm_api(config: LLMApiConfig = {}): Promise<LLM
     hazo_llm_prompt_chain: async (params: PromptChainParams, llm?: ProviderName): Promise<PromptChainResponse> => {
       return hazo_llm_prompt_chain(params, llm);
     },
+    hazo_llm_dynamic_data_extract: async (params: DynamicDataExtractParams, llm?: ProviderName): Promise<DynamicDataExtractResponse> => {
+      return hazo_llm_dynamic_data_extract(params, llm);
+    },
   };
 
   return client;
@@ -1231,6 +1237,52 @@ export async function hazo_llm_prompt_chain(params: PromptChainParams, llm?: Pro
   }
 }
 
+/**
+ * Execute a dynamic chain of LLM calls where each next prompt
+ * is determined by JSON output from the current call using
+ * the next_prompt database field with JSONPath extraction
+ *
+ * @param params - Dynamic extract parameters
+ * @param llm - Optional LLM provider name (uses primary LLM if not specified)
+ * @returns Dynamic extract response with merged results and step details
+ *
+ * @example
+ * ```typescript
+ * import { hazo_llm_dynamic_data_extract } from 'hazo_llm_api/server';
+ *
+ * // Prompts in database:
+ * // - "doc/classify" returns { document_type: "invoice" }
+ * //   with next_prompt: { static_prompt_area: "doc", dynamic_prompt_key: "$.document_type" }
+ * // - "doc/invoice" returns { amount: 1500, vendor: "ACME" }
+ *
+ * const response = await hazo_llm_dynamic_data_extract({
+ *   initial_prompt_area: 'doc',
+ *   initial_prompt_key: 'classify',
+ *   image_b64: '...',
+ *   image_mime_type: 'image/png'
+ * });
+ *
+ * // response.merged_result = { document_type: 'invoice', amount: 1500, vendor: 'ACME' }
+ * ```
+ */
+export async function hazo_llm_dynamic_data_extract(params: DynamicDataExtractParams, llm?: ProviderName): Promise<DynamicDataExtractResponse> {
+  try {
+    const config = check_initialized();
+    const db = get_database();
+    return hazo_llm_dynamic_data_extract_internal(params, db, config, llm);
+  } catch (error) {
+    return {
+      success: false,
+      merged_result: {},
+      step_results: [],
+      errors: [{ step_index: -1, error: error instanceof Error ? error.message : String(error) }],
+      total_steps: 0,
+      successful_steps: 0,
+      final_stop_reason: 'error',
+    };
+  }
+}
+
 // =============================================================================
 // Streaming Functions
 // =============================================================================
@@ -1438,4 +1490,13 @@ export type {
   ChainCallResult,
   PromptChainParams,
   PromptChainResponse,
+  // Dynamic Data Extract Types
+  DynamicDataExtractParams,
+  DynamicDataExtractResponse,
+  DynamicExtractStepResult,
+  DynamicExtractStopReason,
+  NextPromptConfig,
+  NextPromptBranch,
+  NextPromptCondition,
+  NextPromptOperator,
 } from './types.js';

@@ -212,14 +212,26 @@ export class GeminiProvider implements LLMProvider {
    */
   async image_text(params: ImageTextParams, logger: Logger): Promise<LLMResponse> {
     const file_name = 'gemini_provider.ts';
-    
+
+    // Log received params for debugging
+    const received_b64_length = params.image_b64?.length || 0;
+    logger.info(`[GEMINI_PROVIDER] image_text received params`, {
+      file: file_name,
+      data: {
+        prompt_length: params.prompt?.length || 0,
+        image_b64_length: received_b64_length,
+        image_mime_type: params.image_mime_type,
+        has_image: !!params.image_b64,
+      },
+    });
+
     if (!params.image_b64 || !params.image_mime_type) {
       return {
         success: false,
         error: 'image_b64 and image_mime_type are required',
       };
     }
-    
+
     const image_data: Base64Data[] = [{
       mime_type: params.image_mime_type,
       data: params.image_b64,

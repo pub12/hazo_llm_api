@@ -49,4 +49,5 @@ logs/
 test-app/.next/
 test-app/out/
 test-app/node_modules/
+test-app/log/*.log
 

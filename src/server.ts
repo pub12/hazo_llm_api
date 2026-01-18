@@ -14,6 +14,7 @@
  * - hazo_llm_document_text: Document input → Text output (PDF analysis)
  * - hazo_llm_text_image_text: Text → Image → Text (chained)
  * - hazo_llm_prompt_chain: Chain multiple prompts with dynamic value resolution
+ * - hazo_llm_dynamic_data_extract: Dynamic chain where next prompt is determined by JSON output
  */
 
 // =============================================================================
@@ -29,6 +30,7 @@ export {
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
   hazo_llm_prompt_chain,
+  hazo_llm_dynamic_data_extract,
   // Streaming functions
   hazo_llm_text_text_stream,
   hazo_llm_image_text_stream,
@@ -97,6 +99,16 @@ export { build_error_response } from './lib/llm_api/provider_helper.js';
 export type { LLMErrorCode, LLMError } from './lib/llm_api/types.js';
 
 // =============================================================================
+// Logging Exports (hazo_logs)
+// =============================================================================
+export {
+  create_hazo_logger,
+  parse_logging_config,
+  type HazoLoggerConfig,
+  type LogLevel,
+} from './lib/hazo_logs/index.js';
+
+// =============================================================================
 // Type Re-exports
 // =============================================================================
 export type {
@@ -137,5 +149,14 @@ export type {
   ChainCallResult,
   PromptChainParams,
   PromptChainResponse,
+  // Dynamic Data Extract types
+  DynamicDataExtractParams,
+  DynamicDataExtractResponse,
+  DynamicExtractStepResult,
+  DynamicExtractStopReason,
+  NextPromptConfig,
+  NextPromptBranch,
+  NextPromptCondition,
+  NextPromptOperator,
 } from './lib/llm_api/types.js';
 

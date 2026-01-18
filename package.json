@@ -52,7 +52,9 @@
   },
   "dependencies": {
     "ini": "^6.0.0",
-    "sql.js": "^1.10.0"
+    "sql.js": "^1.10.0",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

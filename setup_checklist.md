@@ -39,6 +39,18 @@ yarn add react react-dom
 Create `config/hazo_llm_api_config.ini` in your project:
 
 ```ini
+[logging]
+# Log file path (relative to config directory parent)
+logfile=logs/hazo_llm_api.log
+# Minimum log level: debug, info, warn, error
+level=info
+# Max file size before rotation (e.g., '10m', '100k')
+max_size=10m
+# Max number of rotated files to keep
+max_files=5
+# Also log to console (true/false)
+console_enabled=true
+
 [llm]
 # Comma-separated list or JSON array of enabled providers
 enabled_llms=["gemini"]
@@ -90,6 +102,25 @@ module.exports = nextConfig;
 
 ---
 
+### 5. Create Logs Directory
+
+Create a `logs/` directory in your project root:
+
+```bash
+mkdir logs
+# Add a .gitkeep file to track the directory
+echo "# Log files are gitignored" > logs/.gitkeep
+```
+
+Add log files to `.gitignore`:
+
+```bash
+# In .gitignore
+logs/*.log
+```
+
+---
+
 ## Verification
 
 ### 6. Test the Installation
@@ -98,20 +129,21 @@ Create a test file to verify the setup:
 
 ```typescript
 // test-setup.ts (run with ts-node or in your app)
-import { initialize_llm_api } from 'hazo_llm_api/server';
-
-const logger = {
-  error: console.error,
-  info: console.log,
-  warn: console.warn,
-  debug: console.debug,
-};
+import {
+  initialize_llm_api,
+  create_hazo_logger,
+  parse_logging_config,
+} from 'hazo_llm_api/server';
 
 async function test() {
   try {
+    // Use built-in Winston logger
+    const log_config = parse_logging_config('./config/hazo_llm_api_config.ini');
+    const logger = create_hazo_logger(log_config);
+
     const client = await initialize_llm_api({ logger });
-    console.log('✅ LLM API initialized successfully');
-    console.log('Database ready:', client.db_initialized);
+    logger.info('✅ LLM API initialized successfully');
+    logger.info('Database ready', { db_initialized: client.db_initialized });
 
     // Test a simple call
     const response = await client.hazo_llm_text_text({
@@ -119,10 +151,13 @@ async function test() {
     });
 
     if (response.success) {
-      console.log('✅ API call successful:', response.text);
+      logger.info('✅ API call successful', { response: response.text });
     } else {
-      console.log('❌ API call failed:', response.error);
+      logger.error('❌ API call failed', { error: response.error });
     }
+
+    // Check that log file was created
+    console.log('Check logs/ directory for log files');
   } catch (error) {
     console.error('❌ Setup failed:', error);
   }
@@ -142,10 +177,16 @@ import {
   initialize_llm_api,
   hazo_llm_text_text,
   hazo_llm_image_text,
+  create_hazo_logger,
+  parse_logging_config,
 } from 'hazo_llm_api/server';
 
+// Create logger from config
+const log_config = parse_logging_config('./config/hazo_llm_api_config.ini');
+const logger = create_hazo_logger(log_config);
+
 // Initialize once at app startup
-await initialize_llm_api({ logger: yourLogger });
+await initialize_llm_api({ logger });
 
 // Use the API
 const response = await hazo_llm_text_text({
@@ -256,10 +297,76 @@ PostgreSQL is not currently supported. The package uses sql.js (SQLite) for:
 
 If you need PostgreSQL support, please open a feature request on GitHub.
 
+---
+
+## Logging Setup
+
+### Built-in Winston Logger
+
+The package includes a file-based Winston logger with daily rotation.
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `logfile` | string | Required | Path to log file (relative to config parent) |
+| `level` | string | 'info' | Minimum log level (debug, info, warn, error) |
+| `max_size` | string | '10m' | Max file size before rotation |
+| `max_files` | number | 5 | Max rotated files to keep |
+| `console_enabled` | boolean | true | Also log to console |
+
+### Log File Format
+
+```
+YYYY-MM-DD HH:mm:ss.SSS [LEVEL] message {"key":"value"}
+```
+
+Example:
+```
+2026-01-18 08:22:00.885 [INFO] Logger initialized {"config_path":"..."}
+2026-01-18 08:22:01.123 [DEBUG] API call started {"provider":"gemini"}
+```
+
+### Centralized Logger Pattern
+
+For applications with multiple API routes, create a centralized logger:
+
+```typescript
+// lib/logger.ts
+import { create_hazo_logger, parse_logging_config } from 'hazo_llm_api/server';
+import type { Logger } from 'hazo_llm_api';
+import path from 'path';
+
+const CONFIG_PATH = path.resolve(process.cwd(), 'config', 'hazo_llm_api_config.ini');
+
+let _logger: Logger | null = null;
+
+export function get_logger(): Logger {
+  if (!_logger) {
+    const config = parse_logging_config(CONFIG_PATH);
+    _logger = create_hazo_logger(config);
+  }
+  return _logger;
+}
+
+export const logger = get_logger();
+```
+
+Then import in your API routes:
+
+```typescript
+// api/my-route.ts
+import { logger } from '@/lib/logger';
+
+logger.info('Route accessed');
+```
+
 ## Troubleshooting Checklist
 
 - [ ] Config file is named exactly `hazo_llm_api_config.ini`
 - [ ] Config file is in `config/` directory (or parent directories)
+- [ ] Config file has `[logging]` section with `logfile` setting
+- [ ] Logs directory exists and has write permissions
 - [ ] Environment variables are in `.env.local` (not `.env`)
 - [ ] API key environment variable matches provider name (e.g., `GEMINI_API_KEY`)
 - [ ] Provider is listed in `enabled_llms` array
@@ -267,6 +374,14 @@ If you need PostgreSQL support, please open a feature request on GitHub.
 - [ ] Next.js has `transpilePackages: ['hazo_llm_api']` configured
 - [ ] Database file has write permissions
 - [ ] SQLite path in config points to a writable location
+
+### Logging Troubleshooting
+
+- [ ] Check that `logs/` directory exists
+- [ ] Verify log file path in config is correct
+- [ ] Check file permissions on logs directory
+- [ ] Look for log files with date suffix: `hazo_llm_api-YYYY-MM-DD.log`
+- [ ] If console output works but file doesn't, check path permissions
 
 ---
 
@@ -308,6 +423,9 @@ your-project/
 ├── .env.local                    # API keys (gitignored)
 ├── config/
 │   └── hazo_llm_api_config.ini   # Package configuration
+├── logs/                         # Log files directory
+│   ├── .gitkeep                  # Keep directory in git
+│   └── hazo_llm_api-YYYY-MM-DD.log  # Daily log files (gitignored)
 ├── prompt_library.sqlite         # Auto-created prompt database
 ├── next.config.js                # Next.js config (if applicable)
 ├── package.json

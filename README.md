@@ -23,6 +23,7 @@ A wrapper package for calling different LLMs with built-in prompt management and
 - **Extensible Architecture**: Provider-based design with simple registration system
 - **Type-Safe**: Full TypeScript support with comprehensive type definitions
 - **Auto-Initialization**: Database initializes automatically on import
+- **File-Based Logging**: Built-in Winston logger with daily file rotation
 
 ## Installation
 
@@ -65,15 +66,22 @@ import {
   hazo_llm_image_text,
   hazo_llm_text_image,
   hazo_llm_image_image,
+  // Built-in Winston logger
+  create_hazo_logger,
+  parse_logging_config,
 } from 'hazo_llm_api/server';
 
-// Create a logger (Winston-compatible)
-const logger = {
-  error: console.error,
-  info: console.log,
-  warn: console.warn,
-  debug: console.debug,
-};
+// Option A: Use built-in Winston logger with file rotation
+const config = parse_logging_config('./config/hazo_llm_api_config.ini');
+const logger = create_hazo_logger(config);
+
+// Option B: Use a simple console logger
+// const logger = {
+//   error: console.error,
+//   info: console.log,
+//   warn: console.warn,
+//   debug: console.debug,
+// };
 
 // Initialize - reads config from config/hazo_llm_api_config.ini
 await initialize_llm_api({ logger });
@@ -633,6 +641,69 @@ if (!response.success) {
 ```
 
 ## Configuration
+
+### File-Based Logging (hazo_logs)
+
+The package includes a built-in Winston-based logger with daily file rotation. Configure logging in your `config/hazo_llm_api_config.ini`:
+
+```ini
+[logging]
+# Log file path (relative to config directory parent)
+logfile=logs/hazo_llm_api.log
+# Minimum log level: debug, info, warn, error
+level=info
+# Max file size before rotation (e.g., '10m', '100k')
+max_size=10m
+# Max number of rotated files to keep
+max_files=5
+# Also log to console (true/false)
+console_enabled=true
+```
+
+#### Using the Built-in Logger
+
+```typescript
+import { create_hazo_logger, parse_logging_config } from 'hazo_llm_api/server';
+
+// Parse config from INI file
+const config = parse_logging_config('./config/hazo_llm_api_config.ini');
+
+// Create logger instance
+const logger = create_hazo_logger(config);
+
+// Pass to initialize_llm_api
+await initialize_llm_api({ logger });
+
+// Use directly for application logging
+logger.info('Application started');
+logger.debug('Debug information', { key: 'value' });
+logger.error('Error occurred', { error: err.message });
+```
+
+#### Log Output Format
+
+```
+2026-01-18 08:22:00.885 [INFO] Logger initialized {"config_path":"..."}
+2026-01-18 08:22:01.123 [DEBUG] API call started {"provider":"gemini"}
+2026-01-18 08:22:02.456 [ERROR] Request failed {"error":"timeout"}
+```
+
+#### Log File Rotation
+
+Log files are automatically rotated:
+- Daily rotation with date suffix: `hazo_llm_api-2026-01-18.log`
+- Size-based rotation when `max_size` is exceeded
+- Old files are deleted when `max_files` limit is reached
+
+#### HazoLoggerConfig Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `log_file` | string | Required | Full path to log file |
+| `log_level` | LogLevel | 'info' | Minimum log level (debug, info, warn, error) |
+| `max_size` | string | '10m' | Max file size before rotation |
+| `max_files` | number | 5 | Max rotated files to keep |
+| `console_enabled` | boolean | true | Also log to console |
 
 ### Logger Interface
 

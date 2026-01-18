@@ -85,9 +85,12 @@ export async function hazo_llm_image_text(
 
     const provider = provider_result.provider;
 
+    // Log with placeholder for base64 data (avoid logging full base64)
+    const image_b64_length = params.image_b64?.length || 0;
     log_api_details(provider, SERVICE_TYPES.IMAGE_TEXT, FILE_NAME, logger, {
       prompt_text: final_prompt,
       image_mime_type: params.image_mime_type,
+      image_b64: `[BASE64_DATA: ${image_b64_length} chars]`,
       llm_requested: llm || 'primary',
     });
 

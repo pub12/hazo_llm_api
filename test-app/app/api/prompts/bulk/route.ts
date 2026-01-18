@@ -13,10 +13,11 @@ import {
   get_database,
   initialize_llm_api
 } from 'hazo_llm_api/server';
-import type { Logger, PromptRecord } from 'hazo_llm_api';
+import type { PromptRecord } from 'hazo_llm_api';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
+import { logger } from '@/lib/logger';
 
 // =============================================================================
 // Types
@@ -33,6 +34,7 @@ interface ExportedPrompt {
   prompt_text: string;
   prompt_variables?: Array<{ name: string; description: string }>;
   prompt_notes?: string;
+  next_prompt?: string | null;
 }
 
 // =============================================================================
@@ -71,17 +73,6 @@ function get_app_config(): AppConfig {
 }
 
 // =============================================================================
-// Logger
-// =============================================================================
-
-const test_logger: Logger = {
-  error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-  info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-  warn: (msg, meta) => console.warn(`[WARN] ${msg}`, meta),
-  debug: (msg, meta) => console.debug(`[DEBUG] ${msg}`, meta),
-};
-
-// =============================================================================
 // Initialize LLM API (if not already initialized)
 // =============================================================================
 
@@ -97,11 +88,11 @@ async function ensure_initialized(): Promise<boolean> {
 
     try {
       await initialize_llm_api({
-        logger: test_logger,
+        logger: logger,
         sqlite_path: app_config.sqlite_path,
       });
     } catch (error) {
-      test_logger.error('Failed to initialize LLM API', {
+      logger.error('Failed to initialize LLM API', {
         file: 'prompts/bulk/route.ts',
         line: 95,
         data: { error: error instanceof Error ? error.message : String(error) },
@@ -150,7 +141,7 @@ export async function DELETE(request: Request) {
 
     for (const id of ids) {
       try {
-        const deleted = delete_prompt(db, id, test_logger);
+        const deleted = delete_prompt(db, id, logger);
         if (deleted) {
           deleted_count++;
         } else {
@@ -231,9 +222,10 @@ export async function POST(request: Request) {
           prompt_notes: prompt.prompt_notes || '',
           created_at: new Date().toISOString(),
           changed_at: new Date().toISOString(),
+          next_prompt: prompt.next_prompt || null,
         };
 
-        insert_prompt(db, new_prompt, test_logger);
+        insert_prompt(db, new_prompt, logger);
         imported_count++;
       } catch (err) {
         errors.push(`Failed to import ${prompt.prompt_area}/${prompt.prompt_key}: ${err instanceof Error ? err.message : String(err)}`);

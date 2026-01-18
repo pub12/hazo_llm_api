@@ -17,14 +17,16 @@ import {
   hazo_llm_text_image_text,
   hazo_llm_image_image_text,
   hazo_llm_prompt_chain,
+  hazo_llm_dynamic_data_extract,
   insert_prompt,
   get_database,
   is_initialized,
 } from 'hazo_llm_api/server';
-import type { Logger, TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, DocumentTextParams, TextImageTextParams, ImageImageTextParams, ChainImage, PromptChainParams } from 'hazo_llm_api/server';
+import type { TextTextParams, ImageTextParams, TextImageParams, ImageImageParams, DocumentTextParams, TextImageTextParams, ImageImageTextParams, ChainImage, PromptChainParams, DynamicDataExtractParams } from 'hazo_llm_api/server';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
+import { logger } from '@/lib/logger';
 
 // =============================================================================
 // Config Reader
@@ -63,25 +65,6 @@ function get_app_config(): AppConfig {
 }
 
 // =============================================================================
-// Simple Console Logger (for testing)
-// =============================================================================
-
-const test_logger: Logger = {
-  error: (message: string, meta?: Record<string, unknown>) => {
-    console.error(`[ERROR] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
-  },
-  info: (message: string, meta?: Record<string, unknown>) => {
-    console.log(`[INFO] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
-  },
-  warn: (message: string, meta?: Record<string, unknown>) => {
-    console.warn(`[WARN] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
-  },
-  debug: (message: string, meta?: Record<string, unknown>) => {
-    console.debug(`[DEBUG] ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
-  },
-};
-
-// =============================================================================
 // Initialize LLM API (if not already initialized)
 // =============================================================================
 
@@ -98,11 +81,11 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        logger: test_logger,
+        logger: logger,
         sqlite_path: app_config.sqlite_path,
       });
     } catch (error) {
-      test_logger.error('Failed to initialize LLM API', {
+      logger.error('Failed to initialize LLM API', {
         file: 'route.ts',
         line: 60,
         data: { error: error instanceof Error ? error.message : String(error) },
@@ -209,6 +192,10 @@ export async function POST(request: NextRequest) {
         result = await test_prompt_chain(body, llm);
         break;
 
+      case 'dynamic_data_extract':
+        result = await test_dynamic_data_extract(body, llm);
+        break;
+
       default:
         result = {
           test_name: 'unknown',
@@ -221,7 +208,7 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error);
-    test_logger.error('Test API error', {
+    logger.error('Test API error', {
       file: file_name,
       line: 125,
       data: { error: error_message },
@@ -500,7 +487,7 @@ async function insert_test_prompt_data(body: Record<string, unknown>): Promise<T
       prompt_text,
       prompt_variables,
       prompt_notes,
-    }, test_logger);
+    }, logger);
     
     return {
       test_name: 'Insert Test Prompt',
@@ -746,7 +733,7 @@ async function test_image_image_text(body: Record<string, unknown>, llm?: string
   const interim_images: Array<{ base64: string; mime_type: string; step: number }> = [];
   
   // Step 1: Combine first two images
-  test_logger.info('Chain Step 1: Combining first two images', {
+  logger.info('Chain Step 1: Combining first two images', {
     file: 'route.ts',
     line: 680,
   });
@@ -781,7 +768,7 @@ async function test_image_image_text(body: Record<string, unknown>, llm?: string
     const step_num = i;
     const prompt_index = i - 1;
     
-    test_logger.info(`Chain Step ${step_num}: Adding image ${i + 1}`, {
+    logger.info(`Chain Step ${step_num}: Adding image ${i + 1}`, {
       file: 'route.ts',
       line: 710,
     });
@@ -813,7 +800,7 @@ async function test_image_image_text(body: Record<string, unknown>, llm?: string
   }
   
   // Final step: Describe the final image
-  test_logger.info('Chain Final Step: Generating description', {
+  logger.info('Chain Final Step: Generating description', {
     file: 'route.ts',
     line: 740,
   });
@@ -988,6 +975,61 @@ async function test_prompt_chain(body: Record<string, unknown>, llm?: string): P
   };
 }
 
+/**
+ * Test 12: Dynamic Data Extract
+ * Execute a dynamic chain where next prompt is determined by JSON output from current call
+ */
+async function test_dynamic_data_extract(body: Record<string, unknown>, llm?: string): Promise<TestResult> {
+  const initial_prompt_area = body.initial_prompt_area as string;
+  const initial_prompt_key = body.initial_prompt_key as string;
+  const initial_prompt_variables = body.initial_prompt_variables as Record<string, string>[] | undefined;
+  const image_b64 = body.image_b64 as string | undefined;
+  const image_mime_type = body.image_mime_type as string | undefined;
+  const max_depth = (body.max_depth as number) ?? 10;
+  const continue_on_error = (body.continue_on_error as boolean) ?? false;
+  const context_data = body.context_data as Record<string, unknown> | undefined;
+
+  if (!initial_prompt_area || !initial_prompt_key) {
+    return {
+      test_name: 'Dynamic Data Extract',
+      success: false,
+      message: 'initial_prompt_area and initial_prompt_key are required',
+      error: 'Please provide the starting prompt area and key',
+    };
+  }
+
+  const params: DynamicDataExtractParams = {
+    initial_prompt_area,
+    initial_prompt_key,
+    initial_prompt_variables,
+    image_b64,
+    image_mime_type,
+    max_depth,
+    continue_on_error,
+    context_data,
+  };
+
+  const response = await hazo_llm_dynamic_data_extract(params, llm);
+
+  return {
+    test_name: 'Dynamic Data Extract',
+    success: response.success,
+    message: response.success
+      ? `Chain completed: ${response.successful_steps}/${response.total_steps} steps succeeded (${response.final_stop_reason})`
+      : `Chain failed: ${response.errors.length} errors (${response.final_stop_reason})`,
+    data: {
+      merged_result: response.merged_result,
+      step_results: response.step_results,
+      total_steps: response.total_steps,
+      successful_steps: response.successful_steps,
+      final_stop_reason: response.final_stop_reason,
+    },
+    error: response.errors.length > 0
+      ? response.errors.map(e => `Step ${e.step_index}: ${e.error}`).join('; ')
+      : undefined,
+  };
+}
+
 // =============================================================================
 // GET Handler - Get Test Status
 // =============================================================================
@@ -1010,6 +1052,7 @@ export async function GET() {
       'image_image_text',
       'transform_image',
       'prompt_chain',
+      'dynamic_data_extract',
     ],
   });
 }

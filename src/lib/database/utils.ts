@@ -50,6 +50,7 @@ export function row_to_prompt_record(row: unknown[], columns: string[]): PromptR
     prompt_notes: String(record.prompt_notes || ''),
     created_at: String(record.created_at || ''),
     changed_at: String(record.changed_at || ''),
+    next_prompt: record.next_prompt != null ? String(record.next_prompt) : null,
   };
 }
 
@@ -71,6 +72,7 @@ export const PROMPT_COLUMNS = {
   PROMPT_NOTES: 10,
   CREATED_AT: 11,
   CHANGED_AT: 12,
+  NEXT_PROMPT: 13,
 } as const;
 
 /**
@@ -90,6 +92,7 @@ export const PROMPT_COLUMN_NAMES = [
   'prompt_notes',
   'created_at',
   'changed_at',
+  'next_prompt',
 ] as const;
 
 /**

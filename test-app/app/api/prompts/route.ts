@@ -7,10 +7,11 @@
 
 import { NextResponse } from 'next/server';
 import { get_all_prompts, insert_prompt, is_initialized, get_database, initialize_llm_api } from 'hazo_llm_api/server';
-import type { Logger, PromptRecord } from 'hazo_llm_api';
+import type { PromptRecord } from 'hazo_llm_api';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ini from 'ini';
+import { logger } from '@/lib/logger';
 
 // =============================================================================
 // Config Reader
@@ -49,17 +50,6 @@ function get_app_config(): AppConfig {
 }
 
 // =============================================================================
-// Logger
-// =============================================================================
-
-const test_logger: Logger = {
-  error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-  info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-  warn: (msg, meta) => console.warn(`[WARN] ${msg}`, meta),
-  debug: (msg, meta) => console.debug(`[DEBUG] ${msg}`, meta),
-};
-
-// =============================================================================
 // Initialize LLM API (if not already initialized)
 // =============================================================================
 
@@ -75,11 +65,11 @@ async function ensure_initialized(): Promise<boolean> {
     
     try {
       await initialize_llm_api({
-        logger: test_logger,
+        logger: logger,
         sqlite_path: app_config.sqlite_path,
       });
     } catch (error) {
-      test_logger.error('Failed to initialize LLM API', {
+      logger.error('Failed to initialize LLM API', {
         file: 'prompts/route.ts',
         line: 75,
         data: { error: error instanceof Error ? error.message : String(error) },
@@ -113,7 +103,7 @@ export async function GET() {
       );
     }
     
-    const prompts = get_all_prompts(db, test_logger);
+    const prompts = get_all_prompts(db, logger);
     return NextResponse.json({ success: true, data: prompts });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -147,7 +137,7 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
-    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes } = body;
+    const { prompt_area, prompt_key, local_1, local_2, local_3, user_id, scope_id, prompt_text, prompt_variables, prompt_notes, next_prompt } = body;
 
     if (!prompt_area || !prompt_key || !prompt_text) {
       return NextResponse.json(
@@ -170,9 +160,10 @@ export async function POST(request: Request) {
       prompt_notes: prompt_notes || '',
       created_at: new Date().toISOString(),
       changed_at: new Date().toISOString(),
+      next_prompt: next_prompt || null,
     };
 
-    insert_prompt(db, new_prompt, test_logger);
+    insert_prompt(db, new_prompt, logger);
     
     return NextResponse.json({ success: true, data: new_prompt });
   } catch (error) {

@@ -48,14 +48,16 @@ export async function call_gemini_api(
     const api_generation_config = build_api_generation_config(generation_config);
     
     // Log the Gemini API call with generation config
-    logger.debug('Calling Gemini API', {
+    const first_image_size = b64_data && b64_data.length > 0 ? b64_data[0].data?.length || 0 : 0;
+    logger.info('[GEMINI_CLIENT] Calling Gemini API', {
       file: file_name,
-      line: 42,
       data: {
         api_url,
-        prompt_text,
+        prompt_text_length: prompt_text?.length || 0,
         has_image_data: b64_data && b64_data.length > 0,
         image_count: b64_data?.length || 0,
+        first_image_b64_length: first_image_size,
+        first_image_mime_type: b64_data && b64_data.length > 0 ? b64_data[0].mime_type : null,
         generation_config: api_generation_config || 'none (using defaults)',
       },
     });
